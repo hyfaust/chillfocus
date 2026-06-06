@@ -7,6 +7,8 @@ interface Props {
   onCancel: () => void;
 }
 
+const ASPECT = 3.75; // Match Pomodoro container ratio (1200×320)
+
 export default function ImageCropper({ src, onCrop, onCancel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -27,8 +29,14 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
       const w = img.width * ratio;
       const h = img.height * ratio;
       setImgSize({ w, h });
-      const cropSize = Math.min(w, h) * 0.6;
-      setCrop({ x: (w - cropSize) / 2, y: (h - cropSize) / 2, w: cropSize, h: cropSize * 0.5625 });
+
+      let cropW = w * 0.85;
+      let cropH = cropW / ASPECT;
+      if (cropH > h * 0.85) {
+        cropH = h * 0.85;
+        cropW = cropH * ASPECT;
+      }
+      setCrop({ x: (w - cropW) / 2, y: (h - cropH) / 2, w: cropW, h: cropH });
       setLoaded(true);
     };
     img.src = src;
@@ -96,8 +104,8 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
     const img = imgRef.current;
     if (!img) return;
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = 1280;
-    outCanvas.height = 720;
+    outCanvas.width = 1200;
+    outCanvas.height = 320;
     const ctx = outCanvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(img,
@@ -105,37 +113,46 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
       (crop.y / imgSize.h) * img.height,
       (crop.w / imgSize.w) * img.width,
       (crop.h / imgSize.h) * img.height,
-      0, 0, 1280, 720
+      0, 0, 1200, 320
     );
     onCrop(outCanvas.toDataURL('image/jpeg', 0.85));
   }, [crop, imgSize, onCrop]);
 
-  const handleResizeMouseDown = useCallback((edge: string, e: React.MouseEvent) => {
+  const handleResizeMouseDown = useCallback((corner: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startY = e.clientY;
     const startCrop = { ...crop };
 
     const onMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
       setCrop(() => {
-        let { x, y, w, h } = startCrop;
-        const minSize = 40;
-        if (edge.includes('e')) w = Math.max(minSize, Math.min(imgSize.w - x, startCrop.w + dx));
-        if (edge.includes('s')) h = Math.max(minSize, Math.min(imgSize.h - y, startCrop.h + dy));
-        if (edge.includes('w')) {
-          const newW = Math.max(minSize, startCrop.w - dx);
+        let x = startCrop.x;
+        let y = startCrop.y;
+        let newW = startCrop.w;
+        const minW = 60;
+
+        if (corner === 'se' || corner === 'ne') {
+          newW = Math.max(minW, startCrop.w + dx);
+        } else {
+          newW = Math.max(minW, startCrop.w - dx);
+        }
+
+        let newH = newW / ASPECT;
+
+        newW = Math.min(newW, imgSize.w - x);
+        newH = Math.min(newH, imgSize.h - y);
+        if (newH < newW / ASPECT) newW = newH * ASPECT;
+        newH = newW / ASPECT;
+
+        if (corner === 'nw' || corner === 'sw') {
           x = startCrop.x + startCrop.w - newW;
-          w = newW;
         }
-        if (edge.includes('n')) {
-          const newH = Math.max(minSize, startCrop.h - dy);
+        if (corner === 'nw' || corner === 'ne') {
           y = startCrop.y + startCrop.h - newH;
-          h = newH;
         }
-        return { x, y, w, h };
+
+        return { x, y, w: newW, h: newH };
       });
     };
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
@@ -169,10 +186,6 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
             }}
             onMouseDown={handleMouseDown}
           >
-            <div className={`${styles.handle} ${styles.handleN}`} onMouseDown={(e) => handleResizeMouseDown('n', e)} />
-            <div className={`${styles.handle} ${styles.handleS}`} onMouseDown={(e) => handleResizeMouseDown('s', e)} />
-            <div className={`${styles.handle} ${styles.handleW}`} onMouseDown={(e) => handleResizeMouseDown('w', e)} />
-            <div className={`${styles.handle} ${styles.handleE}`} onMouseDown={(e) => handleResizeMouseDown('e', e)} />
             <div className={`${styles.corner} ${styles.cornerNW}`} onMouseDown={(e) => handleResizeMouseDown('nw', e)} />
             <div className={`${styles.corner} ${styles.cornerNE}`} onMouseDown={(e) => handleResizeMouseDown('ne', e)} />
             <div className={`${styles.corner} ${styles.cornerSW}`} onMouseDown={(e) => handleResizeMouseDown('sw', e)} />
