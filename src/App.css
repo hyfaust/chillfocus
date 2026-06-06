@@ -7,50 +7,13 @@
   padding: 0 20px;
 }
 
-/* Header */
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 0;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logo-icon {
-  font-size: 24px;
-}
-
-.logo-text {
-  font-size: 20px;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--accent), #ff6b9d);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.github-link {
-  color: var(--text-secondary);
-  transition: color 0.2s;
-  display: flex;
-  align-items: center;
-}
-
-.github-link:hover {
-  color: var(--text-primary);
-}
-
 /* Main */
 .app-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  padding-top: 24px;
   padding-bottom: 32px;
 }
 

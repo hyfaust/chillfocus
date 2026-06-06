@@ -26,6 +26,7 @@ export default function StickyNotes() {
   const [visible, setVisible] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
   const iconRef = useRef<HTMLDivElement>(null);
 
   const addNote = useCallback((x: number, y: number) => {
@@ -93,12 +94,14 @@ export default function StickyNotes() {
     const onMouseMove = (ev: MouseEvent) => {
       if (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5) {
         moved = true;
+        setDragPreview({ x: ev.clientX, y: ev.clientY });
       }
     };
 
     const onMouseUp = (ev: MouseEvent) => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      setDragPreview(null);
       if (moved) {
         addNote(ev.clientX, ev.clientY);
       } else if (notes.length > 0) {
@@ -234,6 +237,14 @@ export default function StickyNotes() {
       <div className={`${styles.pinnedLayer} ${visible ? '' : styles.notesHidden}`}>
         {pinnedNotes.map(renderNote)}
       </div>
+
+      {/* Drag preview ghost */}
+      {dragPreview && (
+        <div
+          className={styles.dragPreview}
+          style={{ left: dragPreview.x - 40, top: dragPreview.y - 40 }}
+        />
+      )}
 
       <div
         ref={iconRef}

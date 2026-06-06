@@ -215,3 +215,21 @@
   justify-content: center;
   pointer-events: none;
 }
+
+.dragPreview {
+  position: fixed;
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  background: rgba(124, 93, 250, 0.2);
+  border: 2px dashed rgba(124, 93, 250, 0.5);
+  pointer-events: none;
+  z-index: 100;
+  transition: transform 0.05s linear;
+  animation: dragPulse 1s ease-in-out infinite;
+}
+
+@keyframes dragPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
