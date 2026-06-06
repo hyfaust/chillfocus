@@ -11,6 +11,8 @@ const DEFAULT_SETTINGS: PomodoroSettings = {
   notificationSound: '',
   backgroundImage: '',
   autoLoop: false,
+  hideTimeDisplay: false,
+  hideVisualization: false,
 };
 
 interface PomodoroState {

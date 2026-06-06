@@ -245,6 +245,7 @@ export function useAudioPlayer() {
       name: file.name.replace(/\.[^/.]+$/, ''),
       url: URL.createObjectURL(file),
       filePath: (file as any).path || '',
+      sourceFileName: file.name,
       duration: 0,
     }));
     newTracks.forEach(track => {
@@ -395,13 +396,18 @@ export function useAudioPlayer() {
     playTrack(track);
   }, [playTrack, generateShuffleOrder]);
 
+  const sanitizeTrack = (t: Track): Track => ({
+    ...t,
+    url: t.url.startsWith('blob:') ? '' : t.url,
+  });
+
   const exportPlaylist = useCallback((playlistId: string) => {
     const playlist = state.playlists.find(p => p.id === playlistId);
     if (!playlist) return;
     const exportData = {
       version: 2,
       type: 'chillfocus-playlist',
-      playlist,
+      playlist: { ...playlist, tracks: playlist.tracks.map(sanitizeTrack) },
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -414,10 +420,11 @@ export function useAudioPlayer() {
   const exportPlaylists = useCallback((playlistIds: string[]) => {
     const toExport = state.playlists.filter(p => playlistIds.includes(p.id));
     if (toExport.length === 0) return;
+    const sanitize = (p: Playlist) => ({ ...p, tracks: p.tracks.map(sanitizeTrack) });
     const exportData = {
       version: 2,
       type: toExport.length === 1 ? 'chillfocus-playlist' : 'chillfocus-playlists',
-      ...(toExport.length === 1 ? { playlist: toExport[0] } : { playlists: toExport }),
+      ...(toExport.length === 1 ? { playlist: sanitize(toExport[0]) } : { playlists: toExport.map(sanitize) }),
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -439,6 +446,7 @@ export function useAudioPlayer() {
             ...t,
             id: generateId(),
             url: t.filePath ? `file:///${t.filePath.replace(/\\/g, '/')}` : (t.url || ''),
+            sourceFileName: t.sourceFileName || t.name,
           })),
         });
         if (data.type === 'chillfocus-playlist' && data.playlist) {
@@ -459,6 +467,29 @@ export function useAudioPlayer() {
       } catch { /* invalid */ }
     };
     reader.readAsText(file);
+  }, []);
+
+  const reassociateFiles = useCallback((playlistId: string, files: File[]) => {
+    setState(prev => {
+      const playlist = prev.playlists.find(p => p.id === playlistId);
+      if (!playlist) return prev;
+      const fileMap = new Map(files.map(f => [f.name, f]));
+      const updatedTracks = playlist.tracks.map(t => {
+        if (t.url && !t.url.startsWith('blob:')) return t;
+        const matchKey = t.sourceFileName || (t.name + '.mp3');
+        const file = fileMap.get(matchKey) || files.find(f => f.name.replace(/\.[^/.]+$/, '') === t.name);
+        if (file) {
+          return { ...t, url: URL.createObjectURL(file), sourceFileName: file.name };
+        }
+        return t;
+      });
+      return {
+        ...prev,
+        playlists: prev.playlists.map(p =>
+          p.id === playlistId ? { ...p, tracks: updatedTracks } : p
+        ),
+      };
+    });
   }, []);
 
   const startPlayTimer = useCallback((minutes: number, waitForTrackEnd: boolean) => {
@@ -499,6 +530,7 @@ export function useAudioPlayer() {
     exportPlaylist,
     exportPlaylists,
     importPlaylists,
+    reassociateFiles,
     startPlayTimer,
     cancelPlayTimer,
   };

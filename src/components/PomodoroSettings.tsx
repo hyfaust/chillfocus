@@ -91,6 +91,32 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
           </div>
 
           <div className={styles.section}>
+            <label className={styles.toggleLabel}>
+              <span>无时间显示</span>
+              <span className={styles.toggleDesc}>隐藏进度环、时间和轮数</span>
+            </label>
+            <button
+              className={`${styles.toggle} ${settings.hideTimeDisplay ? styles.toggleOn : ''}`}
+              onClick={() => onUpdate({ hideTimeDisplay: !settings.hideTimeDisplay })}
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+
+          <div className={styles.section}>
+            <label className={styles.toggleLabel}>
+              <span>隐藏音频可视化</span>
+              <span className={styles.toggleDesc}>不显示底部频谱动画</span>
+            </label>
+            <button
+              className={`${styles.toggle} ${settings.hideVisualization ? styles.toggleOn : ''}`}
+              onClick={() => onUpdate({ hideVisualization: !settings.hideVisualization })}
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+
+          <div className={styles.section}>
             <label className={styles.label}>阶段提示音</label>
             <div className={styles.fileRow}>
               <button className={styles.fileBtn} onClick={() => audioInputRef.current?.click()}>

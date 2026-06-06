@@ -3,6 +3,7 @@ export interface Track {
   name: string;
   url: string;
   filePath?: string;
+  sourceFileName?: string;
   duration: number;
 }
 
@@ -24,6 +25,8 @@ export interface PomodoroSettings {
   notificationSound: string;
   backgroundImage: string;
   autoLoop: boolean;
+  hideTimeDisplay: boolean;
+  hideVisualization: boolean;
 }
 
 export interface Task {
