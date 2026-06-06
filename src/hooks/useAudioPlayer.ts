@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { generateId } from '../utils/timeUtils';
 import { saveAudioFile, getAudioFile, deleteAudioFile } from '../utils/audioStore';
+import { readFileAsBlobUrl } from '../utils/tauriFileAccess';
 
 interface AudioPlayerState {
   playlists: Playlist[];
@@ -126,13 +127,28 @@ export function useAudioPlayer() {
     return order;
   }, []);
 
-  // Resolve track URL from IndexedDB if needed
+  // Resolve track URL from IndexedDB or disk if needed
   const resolveTrackUrl = useCallback(async (track: Track): Promise<string> => {
     if (track.url && !track.url.startsWith('blob:')) return track.url;
     if (track.fileKey) {
       const file = await getAudioFile(track.fileKey);
       if (file) {
         const url = URL.createObjectURL(file);
+        setState(prev => ({
+          ...prev,
+          playlists: prev.playlists.map(p => ({
+            ...p,
+            tracks: p.tracks.map(t => t.id === track.id ? { ...t, url } : t),
+          })),
+          currentTrack: prev.currentTrack?.id === track.id ? { ...prev.currentTrack, url } : prev.currentTrack,
+        }));
+        return url;
+      }
+    }
+    // Tauri: try reading from disk using filePath
+    if (track.filePath) {
+      const url = await readFileAsBlobUrl(track.filePath);
+      if (url) {
         setState(prev => ({
           ...prev,
           playlists: prev.playlists.map(p => ({
@@ -331,6 +347,28 @@ export function useAudioPlayer() {
     }));
   }, []);
 
+  // Tauri: add tracks from native file dialog (with filePath)
+  const addLocalTracksToPlaylist = useCallback((playlistId: string, tracks: Track[]) => {
+    tracks.forEach(track => {
+      const audio = new Audio(track.url);
+      audio.addEventListener('loadedmetadata', () => {
+        track.duration = audio.duration;
+        setState(prev => ({
+          ...prev,
+          playlists: prev.playlists.map(p =>
+            p.id === playlistId ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) } : p
+          ),
+        }));
+      });
+    });
+    setState(prev => ({
+      ...prev,
+      playlists: prev.playlists.map(p =>
+        p.id === playlistId ? { ...p, tracks: [...p.tracks, ...tracks] } : p
+      ),
+    }));
+  }, []);
+
   const removeTrackFromPlaylist = useCallback((playlistId: string, trackId: string) => {
     setState(prev => {
       const playlist = prev.playlists.find(p => p.id === playlistId);
@@ -513,7 +551,7 @@ export function useAudioPlayer() {
   return {
     ...state, audioRef, getAnalyser,
     createPlaylist, deletePlaylist, renamePlaylist, setActivePlaylist,
-    addTracksToPlaylist, addUrlTrackToPlaylist, removeTrackFromPlaylist,
+    addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist,
     play, pause, togglePlay, next, prev, seek, setVolume, setPlayMode,
     playSpecificTrack, playTrack,
     exportPlaylist, exportPlaylists, importPlaylists, reassociateFiles,

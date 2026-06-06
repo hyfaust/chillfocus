@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { generateId } from '../utils/timeUtils';
 import styles from './StickyNotes.module.css';
@@ -26,7 +26,6 @@ export default function StickyNotes() {
   const [visible, setVisible] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const [creating, setCreating] = useState(false);
   const iconRef = useRef<HTMLDivElement>(null);
 
   const addNote = useCallback((x: number, y: number) => {
@@ -84,35 +83,32 @@ export default function StickyNotes() {
     }));
   }, [setNotes]);
 
-  const handleIconDragStart = useCallback((e: React.DragEvent) => {
-    e.dataTransfer.setData('text/plain', 'create-note');
-    e.dataTransfer.effectAllowed = 'copy';
-    setCreating(true);
-  }, []);
-
-  const handleGlobalDrop = useCallback((e: DragEvent) => {
-    if (e.dataTransfer?.getData('text/plain') !== 'create-note') return;
+  // Icon drag via mouse events (more reliable in WebView)
+  const handleIconMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    addNote(e.clientX, e.clientY);
-    setCreating(false);
-  }, [addNote]);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
 
-  const handleGlobalDragOver = useCallback((e: DragEvent) => {
-    if (creating) e.preventDefault();
-  }, [creating]);
-
-  useEffect(() => {
-    document.addEventListener('drop', handleGlobalDrop);
-    document.addEventListener('dragover', handleGlobalDragOver);
-    return () => {
-      document.removeEventListener('drop', handleGlobalDrop);
-      document.removeEventListener('dragover', handleGlobalDragOver);
+    const onMouseMove = (ev: MouseEvent) => {
+      if (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5) {
+        moved = true;
+      }
     };
-  }, [handleGlobalDrop, handleGlobalDragOver]);
 
-  const handleIconClick = useCallback(() => {
-    if (notes.length > 0) setVisible(v => !v);
-  }, [notes.length]);
+    const onMouseUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      if (moved) {
+        addNote(ev.clientX, ev.clientY);
+      } else if (notes.length > 0) {
+        setVisible(v => !v);
+      }
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [addNote, notes.length]);
 
   const handleNoteMouseDown = useCallback((noteId: string, e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
@@ -242,10 +238,8 @@ export default function StickyNotes() {
       <div
         ref={iconRef}
         className={styles.icon}
-        draggable
-        onDragStart={handleIconDragStart}
-        onClick={handleIconClick}
-        title={notes.length > 0 ? (visible ? '点击隐藏便签' : '点击显示便签') : '拖拽到任意位置创建便签'}
+        onMouseDown={handleIconMouseDown}
+        title="拖拽创建便签 / 点击切换显隐"
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" />

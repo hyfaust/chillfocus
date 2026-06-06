@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles } from '../utils/audioFormats';
+import { isTauri, selectAudioFiles, filesToTracks } from '../utils/tauriFileAccess';
 import styles from './MusicPlayer.module.css';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
   onRenamePlaylist: (id: string, name: string) => void;
   onSetActivePlaylist: (id: string) => void;
   onAddTracks: (playlistId: string, files: File[]) => void;
+  onAddLocalTracks: (playlistId: string, tracks: Track[]) => void;
   onAddUrlTrack: (playlistId: string, url: string, name?: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
   onPlayTrack: (playlistId: string, track: Track) => void;
@@ -57,7 +59,7 @@ export default function MusicPlayer({
   playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, playMode, playTimer,
   onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetPlayMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
-  onAddTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
+  onAddTracks, onAddLocalTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
   onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,11 +83,23 @@ export default function MusicPlayer({
 
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = filterAudioFiles(Array.from(e.target.files || []));
-    if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [activePlaylistId, onAddTracks]);
+  const handleFileSelect = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
+    // Tauri: use native file dialog
+    if (await isTauri()) {
+      if (!activePlaylistId) return;
+      const files = await selectAudioFiles();
+      if (files.length) {
+        onAddLocalTracks(activePlaylistId, filesToTracks(files));
+      }
+      return;
+    }
+    // Web: use input element
+    if (e) {
+      const files = filterAudioFiles(Array.from(e.target.files || []));
+      if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [activePlaylistId, onAddTracks, onAddLocalTracks]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -317,7 +331,7 @@ export default function MusicPlayer({
             </button>
             {showAddMenu && (
               <div className={styles.dropdown}>
-                <button className={styles.dropdownAction} onClick={() => { fileInputRef.current?.click(); setShowAddMenu(false); }}>
+                <button className={styles.dropdownAction} onClick={() => { handleFileSelect(); setShowAddMenu(false); }}>
                   📁 本地文件
                 </button>
                 <div className={styles.dropdownDivider} />
