@@ -1,0 +1,18 @@
+.background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transition: background 2s ease;
+  border-radius: inherit;
+}
+
+.backgroundImage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.35;
+  border-radius: inherit;
+  pointer-events: none;
+}

@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap');
+
+:root {
+  --bg-main: #0f0f1a;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-card-hover: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #7c5dfa;
+  --accent-glow: rgba(124, 93, 250, 0.3);
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.45);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

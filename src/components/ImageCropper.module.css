@@ -1,0 +1,144 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel {
+  background: #1a1a2e;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.canvasWrap {
+  position: relative;
+  display: inline-block;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.cropOverlay {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+.handle {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.handleN {
+  top: -3px;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: n-resize;
+}
+
+.handleS {
+  bottom: -3px;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: s-resize;
+}
+
+.handleW {
+  left: -3px;
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: w-resize;
+}
+
+.handleE {
+  right: -3px;
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: e-resize;
+}
+
+.corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.cornerNW { top: -6px; left: -6px; cursor: nw-resize; }
+.cornerNE { top: -6px; right: -6px; cursor: ne-resize; }
+.cornerSW { bottom: -6px; left: -6px; cursor: sw-resize; }
+.cornerSE { bottom: -6px; right: -6px; cursor: se-resize; }
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancelBtn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  color: var(--text-primary);
+}
+
+.applyBtn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.applyBtn:hover {
+  opacity: 0.9;
+}

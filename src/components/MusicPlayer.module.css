@@ -1,0 +1,435 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 4px;
+}
+
+.headerBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.headerBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.playlistTabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.playlistTabWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.playlistTab {
+  padding: 4px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.playlistTabActive {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.playlistTab:hover:not(.playlistTabActive) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.playlistDeleteBtn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
+  margin-top: -12px;
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.playlistTabWrapper:hover .playlistDeleteBtn { opacity: 1; }
+.playlistDeleteBtn:hover { color: #ff6b6b; }
+
+.playlistExportBtn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -4px;
+  margin-top: -12px;
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.playlistTabWrapper:hover .playlistExportBtn { opacity: 1; }
+.playlistExportBtn:hover { color: var(--accent); }
+
+.playlistEditInput {
+  width: 80px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--accent);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.addPlaylistBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.addPlaylistBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.createPlaylistRow {
+  display: flex;
+  gap: 6px;
+}
+
+.input {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.input:focus { border-color: var(--accent); }
+
+.addBtn {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.nowPlaying {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trackInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.trackName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.trackTime {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressWrap {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-card);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.modeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.modeBtn:hover { color: var(--accent); }
+
+.controlBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.controlBtn:hover { background: var(--bg-card); }
+
+.playBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.playBtn:hover { opacity: 0.85; }
+
+.volumeWrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.volumeBtn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.volumeSlider {
+  width: 70px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.trackListWrap {
+  flex: 1;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  padding: 8px;
+  min-height: 80px;
+  max-height: 220px;
+  transition: border-color 0.2s;
+}
+
+.trackListWrap:hover {
+  border-color: var(--accent);
+}
+
+.trackListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.uploadBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.uploadBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.trackList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trackItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 12px;
+}
+
+.trackItem:hover { background: var(--bg-card); }
+
+.trackItemActive {
+  background: rgba(124, 93, 250, 0.1);
+  color: var(--accent);
+}
+
+.trackIndex {
+  width: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.trackItemActive .trackIndex { color: var(--accent); }
+
+.trackItemName {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.trackItemDuration {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.removeBtn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.trackItem:hover .removeBtn { opacity: 1; }
+.removeBtn:hover { color: #ff6b6b; }
+
+.empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 20px 0;
+}

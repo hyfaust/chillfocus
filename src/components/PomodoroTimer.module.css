@@ -1,0 +1,178 @@
+.container {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 24px 20px;
+  width: 100%;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  position: relative;
+}
+
+.phaseLabel {
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.settingsBtn {
+  position: absolute;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.settingsBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Progress Ring */
+.ringWrap {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ringBg {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.ringProgress {
+  stroke: rgba(255, 255, 255, 0.7);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+}
+
+.ringCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.timeText {
+  font-size: 36px;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
+  line-height: 1;
+  user-select: none;
+}
+
+.roundText {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
+}
+
+.roundDots {
+  display: none;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.btnPrimary {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btnPrimary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.btnPause {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btnSecondary {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btnSecondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.visualizerWrap {
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .ringWrap {
+    width: 160px;
+    height: 160px;
+  }
+  .timeText {
+    font-size: 28px;
+  }
+  .container {
+    min-height: 280px;
+  }
+}

@@ -1,0 +1,156 @@
+/* Notes layer - doesn't block other UI */
+.notesLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.notesHidden {
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.notesHidden .note {
+  pointer-events: none !important;
+}
+
+/* Individual notes - pointer-events: auto so they ARE interactive */
+.note {
+  position: fixed;
+  width: 160px;
+  min-height: 80px;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: move;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: box-shadow 0.2s;
+  pointer-events: auto;
+}
+
+.note:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.noteActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.note:hover .noteActions {
+  opacity: 1;
+}
+
+.noteColorBtn {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.noteColorBtn:hover {
+  transform: scale(1.2);
+}
+
+.noteDeleteBtn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.noteDeleteBtn:hover {
+  background: rgba(255, 0, 0, 0.2);
+  color: #c00;
+}
+
+.noteTextarea {
+  width: 100%;
+  min-height: 60px;
+  border: none;
+  background: transparent;
+  color: #1a1a2e;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+}
+
+.noteTextarea::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.noteText {
+  font-size: 12px;
+  color: #1a1a2e;
+  line-height: 1.5;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 40px;
+}
+
+/* Icon */
+.icon {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  z-index: 50;
+  box-shadow: 0 4px 20px rgba(124, 93, 250, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+
+.icon:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(124, 93, 250, 0.5);
+}
+
+.icon:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
