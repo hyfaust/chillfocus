@@ -24,7 +24,6 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  position: relative;
 }
 
 .phaseLabel {
@@ -37,7 +36,8 @@
 
 .settingsBtn {
   position: absolute;
-  right: 0;
+  top: 12px;
+  right: 12px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -49,6 +49,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  z-index: 5;
 }
 
 .settingsBtn:hover {

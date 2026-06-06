@@ -243,25 +243,34 @@ export function useAudioPlayer() {
     const newTracks: Track[] = files.map(file => ({
       id: generateId(),
       name: file.name.replace(/\.[^/.]+$/, ''),
-      url: URL.createObjectURL(file),
+      url: '',
       filePath: (file as any).path || '',
       sourceFileName: file.name,
       duration: 0,
     }));
-    newTracks.forEach(track => {
-      const audio = new Audio(track.url);
-      audio.addEventListener('loadedmetadata', () => {
-        track.duration = audio.duration;
-        setState(prev => ({
-          ...prev,
-          playlists: prev.playlists.map(p =>
-            p.id === playlistId
-              ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) }
-              : p
-          ),
-        }));
-      });
+
+    newTracks.forEach((track, i) => {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        track.url = dataUrl;
+        const audio = new Audio(dataUrl);
+        audio.addEventListener('loadedmetadata', () => {
+          track.duration = audio.duration;
+          setState(prev => ({
+            ...prev,
+            playlists: prev.playlists.map(p =>
+              p.id === playlistId
+                ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, url: dataUrl, duration: audio.duration } : t) }
+                : p
+            ),
+          }));
+        });
+      };
+      reader.readAsDataURL(file);
     });
+
     setState(prev => ({
       ...prev,
       playlists: prev.playlists.map(p =>
@@ -399,6 +408,7 @@ export function useAudioPlayer() {
   const sanitizeTrack = (t: Track): Track => ({
     ...t,
     url: t.url.startsWith('blob:') ? '' : t.url,
+    filePath: '',
   });
 
   const exportPlaylist = useCallback((playlistId: string) => {
