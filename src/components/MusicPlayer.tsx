@@ -121,8 +121,9 @@ export default function MusicPlayer({
   }, [onImportPlaylists]);
 
   const handleReassociateFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length && activePlaylistId) onReassociateFiles(activePlaylistId, files);
+    const allFiles = Array.from(e.target.files || []);
+    const audioFiles = allFiles.filter(f => /\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|webm)$/i.test(f.name));
+    if (audioFiles.length && activePlaylistId) onReassociateFiles(activePlaylistId, audioFiles);
     if (reassociateInputRef.current) reassociateInputRef.current.value = '';
   }, [activePlaylistId, onReassociateFiles]);
 
@@ -307,7 +308,8 @@ export default function MusicPlayer({
               📂 重新关联文件
             </button>
           )}
-          <input ref={reassociateInputRef} type="file" accept="audio/*" multiple style={{ display: 'none' }} onChange={handleReassociateFile} />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <input ref={reassociateInputRef} type="file" {...({ webkitdirectory: '' } as any)} style={{ display: 'none' }} onChange={handleReassociateFile} />
           <div className={styles.addMusicWrap}>
             <button className={styles.uploadBtn} onClick={() => setShowAddMenu(!showAddMenu)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>

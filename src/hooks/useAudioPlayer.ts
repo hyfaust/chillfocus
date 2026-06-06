@@ -18,6 +18,7 @@ interface AudioPlayerState {
 }
 
 const STORAGE_KEY = 'chillfocus-playlists';
+const PREFS_KEY = 'chillfocus-player-prefs';
 
 function loadPlaylistsFromStorage(): Playlist[] {
   try {
@@ -31,6 +32,15 @@ function loadPlaylistsFromStorage(): Playlist[] {
   } catch { return []; }
 }
 
+function loadPrefsFromStorage(): { volume: number; playMode: PlayMode } {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return { volume: 0.7, playMode: 'sequential' };
+    const data = JSON.parse(raw);
+    return { volume: data.volume ?? 0.7, playMode: data.playMode ?? 'sequential' };
+  } catch { return { volume: 0.7, playMode: 'sequential' }; }
+}
+
 function savePlaylistsToStorage(playlists: Playlist[]) {
   try {
     const serializable = playlists.map(p => ({
@@ -41,9 +51,16 @@ function savePlaylistsToStorage(playlists: Playlist[]) {
   } catch { /* quota exceeded */ }
 }
 
+function savePrefsToStorage(volume: number, playMode: PlayMode) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ volume, playMode }));
+  } catch { /* */ }
+}
+
 export function useAudioPlayer() {
   const [state, setState] = useState<AudioPlayerState>(() => {
     const playlists = loadPlaylistsFromStorage();
+    const prefs = loadPrefsFromStorage();
     return {
       playlists,
       activePlaylistId: playlists[0]?.id ?? null,
@@ -51,8 +68,8 @@ export function useAudioPlayer() {
       isPlaying: false,
       currentTime: 0,
       duration: 0,
-      volume: 0.7,
-      playMode: 'sequential',
+      volume: prefs.volume,
+      playMode: prefs.playMode,
       shuffleOrder: [],
       shuffleIndex: 0,
       playTimer: { duration: 0, remaining: 0, waitForTrackEnd: false, active: false },
@@ -71,6 +88,11 @@ export function useAudioPlayer() {
   useEffect(() => {
     savePlaylistsToStorage(state.playlists);
   }, [state.playlists]);
+
+  // Persist volume and playMode
+  useEffect(() => {
+    savePrefsToStorage(state.volume, state.playMode);
+  }, [state.volume, state.playMode]);
 
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
@@ -404,7 +426,9 @@ export function useAudioPlayer() {
 
   // Export/Import
   const sanitizeTrack = (t: Track): Track => ({
-    id: t.id, name: t.name, url: '', fileKey: '', filePath: '',
+    id: t.id, name: t.name, url: '',
+    fileKey: t.fileKey || '',
+    filePath: '',
     sourceFileName: t.sourceFileName || t.name, duration: t.duration,
   });
 
@@ -444,7 +468,7 @@ export function useAudioPlayer() {
         const importOne = (p: Playlist) => ({
           ...p,
           id: generateId(),
-          tracks: p.tracks.map((t: Track) => ({ ...t, id: generateId(), url: '', fileKey: '' })),
+          tracks: p.tracks.map((t: Track) => ({ ...t, id: generateId(), url: '', fileKey: t.fileKey || '' })),
         });
         if (data.type === 'chillfocus-playlist' && data.playlist) {
           const playlist = importOne(data.playlist);

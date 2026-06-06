@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { generateId } from '../utils/timeUtils';
+import { saveAudioFile, getAudioFile } from '../utils/audioStore';
 import styles from './AmbientSounds.module.css';
 
 interface PresetSound {
@@ -7,7 +8,6 @@ interface PresetSound {
   label: string;
   icon: string;
   src: string;
-  isCustom?: boolean;
 }
 
 const PRESETS: PresetSound[] = [
@@ -26,21 +26,116 @@ interface CustomSound {
   id: string;
   label: string;
   url: string;
+  fileKey?: string;
+}
+
+const STORAGE_KEY = 'chillfocus-custom-sounds';
+const VOLUMES_KEY = 'chillfocus-ambient-volumes';
+const ACTIVE_KEY = 'chillfocus-ambient-active';
+
+function loadCustomSounds(): CustomSound[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data.map((s: CustomSound) => ({ ...s, url: s.fileKey ? '' : s.url })) : [];
+  } catch { return []; }
+}
+
+function saveCustomSounds(sounds: CustomSound[]) {
+  try {
+    const serializable = sounds.map(s => ({ ...s, url: s.fileKey ? '' : s.url }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  } catch { /* */ }
+}
+
+function loadVolumes(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(VOLUMES_KEY);
+    if (!raw) return Object.fromEntries(PRESETS.map(p => [p.id, 0.5]));
+    return JSON.parse(raw);
+  } catch { return Object.fromEntries(PRESETS.map(p => [p.id, 0.5])); }
+}
+
+function saveVolumes(volumes: Record<string, number>) {
+  try { localStorage.setItem(VOLUMES_KEY, JSON.stringify(volumes)); } catch { /* */ }
+}
+
+function loadActiveIds(): string[] {
+  try {
+    const raw = localStorage.getItem(ACTIVE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch { return []; }
+}
+
+function saveActiveIds(ids: string[]) {
+  try { localStorage.setItem(ACTIVE_KEY, JSON.stringify(ids)); } catch { /* */ }
 }
 
 export default function AmbientSounds() {
   const [, setTick] = useState(0);
-  const [volumes, setVolumes] = useState<Record<string, number>>(() => {
-    const v: Record<string, number> = {};
-    PRESETS.forEach(p => { v[p.id] = 0.5; });
-    return v;
-  });
-  const [customSounds, setCustomSounds] = useCustomSounds();
+  const [volumes, setVolumes] = useState<Record<string, number>>(loadVolumes);
+  const [customSounds, setCustomSounds] = useState<CustomSound[]>(loadCustomSounds);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const soundsRef = useRef<Map<string, ActiveSound>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoredRef = useRef(false);
+
+  // Persist custom sounds
+  useEffect(() => { saveCustomSounds(customSounds); }, [customSounds]);
+
+  // Persist volumes
+  useEffect(() => { saveVolumes(volumes); }, [volumes]);
+
+  // Persist active sound IDs — skip until restoration is complete
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    saveActiveIds(Array.from(soundsRef.current.keys()));
+  });
+
+  // Resolve IndexedDB audio for custom sounds, then restore active sounds
+  useEffect(() => {
+    (async () => {
+      const resolved = await Promise.all(customSounds.map(async (s) => {
+        if (s.url) return s;
+        if (s.fileKey) {
+          const file = await getAudioFile(s.fileKey);
+          if (file) return { ...s, url: URL.createObjectURL(file) };
+        }
+        return s;
+      }));
+      const changed = resolved.some((s, i) => s.url !== customSounds[i].url);
+      if (changed) setCustomSounds(resolved);
+
+      // Restore active sounds after first resolution
+      if (!restoredRef.current) {
+        restoredRef.current = true;
+        const savedActive = loadActiveIds();
+        if (savedActive.length > 0) {
+          const allSrcMap = new Map<string, string>();
+          PRESETS.forEach(p => allSrcMap.set(p.id, p.src));
+          resolved.forEach(s => { if (s.url) allSrcMap.set(s.id, s.url); });
+          savedActive.forEach(id => {
+            const src = allSrcMap.get(id);
+            if (src && !soundsRef.current.has(id)) {
+              const audio = new Audio(src);
+              audio.loop = true;
+              audio.volume = volumes[id] ?? 0.5;
+              const onEnded = () => { audio.currentTime = 0; audio.play().catch(() => {}); };
+              audio.addEventListener('ended', onEnded);
+              audio.play().catch(() => {});
+              soundsRef.current.set(id, { audio, volume: volumes[id] ?? 0.5 });
+            }
+          });
+          setTick(t => t + 1);
+        }
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSound = useCallback((id: string, src: string) => {
     const existing = soundsRef.current.get(id);
@@ -72,14 +167,16 @@ export default function AmbientSounds() {
   const handleCustomFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const id = generateId();
+    const fileKey = `ambient_${id}`;
     const url = URL.createObjectURL(file);
     const name = file.name.replace(/\.[^/.]+$/, '');
-    const id = generateId();
-    setCustomSounds(prev => [...prev, { id, label: name, url }]);
+    saveAudioFile(fileKey, file);
+    setCustomSounds(prev => [...prev, { id, label: name, url, fileKey }]);
     setVolumes(prev => ({ ...prev, [id]: 0.5 }));
     setShowCustomForm(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [setCustomSounds]);
+  }, []);
 
   const handleAddCustomUrl = useCallback(() => {
     if (!customUrl.trim()) return;
@@ -90,7 +187,7 @@ export default function AmbientSounds() {
     setCustomUrl('');
     setCustomLabel('');
     setShowCustomForm(false);
-  }, [customUrl, customLabel, setCustomSounds]);
+  }, [customUrl, customLabel]);
 
   const removeCustomSound = useCallback((id: string) => {
     const active = soundsRef.current.get(id);
@@ -100,7 +197,7 @@ export default function AmbientSounds() {
       setTick(t => t + 1);
     }
     setCustomSounds(prev => prev.filter(s => s.id !== id));
-  }, [setCustomSounds]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -109,9 +206,9 @@ export default function AmbientSounds() {
     };
   }, []);
 
-  const allSounds = [
-    ...PRESETS,
-    ...customSounds.map(c => ({ id: c.id, label: c.label, icon: '🎵', src: c.url, isCustom: true as const })),
+  const allSounds: { id: string; label: string; icon: string; src: string; isCustom?: boolean }[] = [
+    ...PRESETS.map(p => ({ ...p })),
+    ...customSounds.map(c => ({ id: c.id, label: c.label, icon: '🎵', src: c.url, isCustom: true })),
   ];
 
   return (
@@ -169,8 +266,4 @@ export default function AmbientSounds() {
       )}
     </div>
   );
-}
-
-function useCustomSounds() {
-  return useState<CustomSound[]>([]);
 }

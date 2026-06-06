@@ -340,14 +340,12 @@
   position: relative;
   overflow-y: auto;
   border-radius: 10px;
-  border: 1px dashed var(--border);
   padding: 8px;
   height: 200px;
   transition: border-color 0.2s;
 }
 
 .trackListWrap:hover {
-  border-color: var(--accent);
 }
 
 .trackListHeader {
