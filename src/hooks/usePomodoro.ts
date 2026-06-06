@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { TimerPhase, PomodoroSettings } from '../types';
 import { useLocalStorage } from './useLocalStorage';
-import { playDefaultNotification } from '../utils/notificationSound';
 
 const DEFAULT_SETTINGS: PomodoroSettings = {
   focusDuration: 25 * 60,
@@ -65,7 +64,13 @@ export function usePomodoro() {
               notifAudioRef.current = audio;
             } catch { /* ignore */ }
           } else {
-            playDefaultNotification();
+            try {
+              if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
+              const audio = new Audio('/sounds/notification.mp3');
+              audio.volume = 0.6;
+              audio.play().catch(() => {});
+              notifAudioRef.current = audio;
+            } catch { /* ignore */ }
           }
 
           // Next phase

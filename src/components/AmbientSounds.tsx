@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { generateId } from '../utils/timeUtils';
 import { saveAudioFile, getAudioFile } from '../utils/audioStore';
+import { isSupportedAudioFile } from '../utils/audioFormats';
 import styles from './AmbientSounds.module.css';
 
 interface PresetSound {
@@ -166,7 +167,7 @@ export default function AmbientSounds() {
 
   const handleCustomFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !isSupportedAudioFile(file)) return;
     const id = generateId();
     const fileKey = `ambient_${id}`;
     const url = URL.createObjectURL(file);

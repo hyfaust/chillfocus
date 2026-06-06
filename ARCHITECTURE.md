@@ -12,12 +12,13 @@ ChillFocus 是一款 Web 端专注力助手应用，采用现代简约 / Lo-fi �
 
 | 层面 | 技术 | 用途 |
 |------|------|------|
-| 框架 | React 18 + TypeScript | 组件化开发，类型安全 |
+| 框架 | React 19 + TypeScript 6 | 组件化开发，类型安全 |
 | 构建 | Vite 8 | 快速 HMR，ESM 原生支持 |
 | 样式 | CSS Modules | 样式隔离，避免全局污染 |
-| 音频 | Web Audio API | 白噪音合成、音频可视化（AnalyserNode） |
+| 音频 | Web Audio API | 音频可视化（AnalyserNode） |
 | 渲染 | Canvas API | 音频频谱条动画，60fps |
-| 存储 | localStorage | 所有用户数据持久化 |
+| 存储 | localStorage | 轻量元数据持久化 |
+| 存储 | IndexedDB | 音频文件二进制持久化 |
 
 ---
 
@@ -29,12 +30,20 @@ chillfocus/
 ├── vite.config.ts                # Vite 配置
 ├── tsconfig.json                 # TypeScript 配置
 ├── package.json                  # 依赖与脚本
+├── LICENSE                       # GPL v3 许可证
+├── README.md                     # 英文文档
+├── README_zh.md                  # 中文文档
+├── ARCHITECTURE.md               # 本文档
+├── UI-DESIGN.md                  # UI 设计详解
+├── DESIGN-GLOSSARY.md            # 设计术语手册
 ├── public/
-│   └── sounds/                   # ChillPulse 真实环境音文件
-│       ├── rain.ogg
-│       ├── fireplace.ogg
-│       ├── forest.ogg
-│       └── wind.ogg
+│   ├── favicon.svg               # 应用图标（渐变音符）
+│   └── sounds/                   # 内置音频资源
+│       ├── rain.ogg              # 雨声（ChillPulse）
+│       ├── fireplace.ogg         # 壁炉（ChillPulse）
+│       ├── forest.ogg            # 森林（ChillPulse）
+│       ├── wind.ogg              # 风声（ChillPulse）
+│       └── notification.mp3      # 默认阶段提示音
 └── src/
     ├── main.tsx                  # React 入口
     ├── App.tsx                   # 根组件，组合所有模块
@@ -43,12 +52,14 @@ chillfocus/
     ├── types/
     │   └── index.ts              # 全局类型定义
     ├── utils/
+    │   ├── audioStore.ts         # IndexedDB 音频文件存储封装
+    │   ├── audioFormats.ts       # 支持的音频格式白名单
     │   ├── timeUtils.ts          # 时间格式化、ID 生成
-    │   ├── notificationSound.ts  # Web Audio API 合成提示音
-    │   └── noiseGenerator.ts     # 白噪音合成（已弃用，保留备用）
+    │   ├── notificationSound.ts  # Web Audio API 合成提示音（备用）
+    │   └── noiseGenerator.ts     # 白噪音合成（已弃用）
     ├── hooks/
     │   ├── usePomodoro.ts        # 番茄钟状态机
-    │   ├── useAudioPlayer.ts     # 音频播放核心逻辑
+    │   ├── useAudioPlayer.ts     # 音频播放核心（IndexedDB 懒加载）
     │   ├── useAudioVisualizer.ts # 频谱可视化 hook
     │   └── useLocalStorage.ts    # localStorage 通用 hook
     └── components/
@@ -74,7 +85,7 @@ chillfocus/
 ```
 状态机:  focus → short-break → focus → ... → long-break → focus
               ↑                                    ↑
-         每轮结束                              4轮后
+         每轮结束                              N轮后
 ```
 
 **核心状态**：
@@ -85,10 +96,11 @@ chillfocus/
 - `settings`: 用户配置（持久化到 localStorage）
 
 **关键实现**：
-- 使用 `setInterval` 驱动倒计时，每秒更新 `timeLeft`
-- 阶段切换时播放提示音（默认 Web Audio 合成 / 自定义音频）
-- `autoLoop` 模式：阶段结束后自动开始下一阶段，不暂停
-- 设置变更时实时更新当前计时（如果未在运行）
+- **单一持久化 interval**：effect 内创建一次 `setInterval`，永不重建。通过 `isRunningRef` 和 `settingsRef` 检查最新状态，避免闭包陈旧值和 effect 重建竞态
+- **默认提示音**：使用 `/sounds/notification.mp3`，支持自定义上传
+- **autoLoop 模式**：阶段结束后 `isRunning` 保持 `true`，自动开始下一阶段
+- **hideTimeDisplay**：隐藏进度环、时间和轮数，内容靠顶部显示
+- **hideVisualization**：隐藏底部频谱动画
 
 #### 渐变背景：`GradientBackground`
 
@@ -100,13 +112,15 @@ chillfocus/
 | 短休息 | 深青 #0f3443 | 薄荷绿 #a3e4d7 |
 | 长休息 | 深绿 #1b4332 | 浅绿 #d8f3dc |
 
+支持自定义背景图片，半透明叠加在渐变色上（`opacity: 0.35`）。图片通过 `ImageCropper` 组件裁剪后以 data URL 存储。
+
 #### 进度环
 
-SVG 圆环，通过 `stroke-dasharray` 和 `stroke-dashoffset` 控制进度。圆心显示时间和轮数。
+SVG 圆环，`stroke-dasharray` + `stroke-dashoffset` 控制进度。圆心显示时间和轮数。`hideTimeDisplay` 模式下整个环不渲染。
 
 #### 音频可视化
 
-可视化组件定位为 `.container` 的直接子元素（非 `.content`），使用 `position: absolute; bottom: 0; height: 62%` 确保始终从容器底部开始，不受内容布局影响。
+可视化组件是 `.container` 的直接子元素（非 `.content`），`position: absolute; bottom: 0; height: 62%` 确保始终从容器底部开始，不受内容布局影响。
 
 ---
 
@@ -115,10 +129,11 @@ SVG 圆环，通过 `stroke-dasharray` 和 `stroke-dashoffset` 控制进度。�
 #### 状态管理：`useAudioPlayer` hook
 
 **核心状态**：
-- `playlists`: 播放列表数组
+- `playlists`: 播放列表数组（持久化到 localStorage）
 - `activePlaylistId`: 当前激活列表
 - `currentTrack`: 当前播放曲目
-- `playMode`: 播放模式
+- `playMode`: 播放模式（持久化到 localStorage）
+- `volume`: 音量（持久化到 localStorage）
 - `playTimer`: 定时播放状态
 
 **播放模式**：
@@ -128,52 +143,38 @@ SVG 圆环，通过 `stroke-dasharray` 和 `stroke-dashoffset` 控制进度。�
 | `sequential` | ↻ | 顺序播放，到末尾停止 |
 | `loop-list` | 🔁 | 列表循环 |
 | `loop-single` | 🔂 | 单曲循环（audio.loop） |
-| `shuffle` | ⤮ | 随机播放（洗牌索引） |
+| `shuffle` | ⤮ | 随机播放（Fisher-Yates 洗牌索引） |
 | `single` | 1️⃣ | 单曲播放，播完停止 |
 
 **自动播放实现**：
 
-`audio` 元素的 `ended` 事件监听器中直接操作音频元素：
+`audio` 元素的 `ended` 事件监听器中直接操作音频元素（不依赖 setState 渲染周期）：
 ```
-onEnded → 查找下一首 → audio.src = nextTrack.url → audio.play()
+onEnded → resolveTrackUrl → audio.src = url → audio.play()
 ```
-不依赖 setState 后的渲染周期，确保无缝衔接。
 
-**Shuffle 实现**：
-- 生成洗牌索引数组（Fisher-Yates 洗牌算法）
-- 切换到 shuffle 模式时，将当前曲目交换到索引 0
-- 维护 `shuffleIndex` 指针
+#### 文件存储架构
+
+```
+localStorage (chillfocus-playlists)
+└── 播放列表结构 + 曲目元数据 (name, fileKey, sourceFileName, duration)
+    ↓ fileKey
+IndexedDB (chillfocus-audio / files)
+└── 音频文件二进制 (File 对象)
+    ↓ 播放时
+URL.createObjectURL(file) → audio.src
+```
+
+**懒加载**：state 中不持有 blob URL。播放时通过 `resolveTrackUrl` 从 IndexedDB 按 `fileKey` 取出 File 并创建 blob URL。
+
+**导入/导出**：
+- 导出：剥离 URL（太大），保留 `fileKey`、`sourceFileName`、`duration`
+- 同机器导入：`fileKey` 直接从 IndexedDB 恢复音频
+- 跨机器导入：显示「📂 重新关联文件夹」按钮，使用 `webkitdirectory` 递归扫描，按 `sourceFileName` 自动匹配
 
 **定时播放**：
 - `setInterval` 每秒倒计时
 - `waitForTrackEnd` 模式：计时结束后等待当前曲目播放完毕再停止
-- 使用 `stateRef` 持有最新状态，避免闭包陈旧值
-
-**文件存储策略**：
-- 本地文件通过 `FileReader.readAsDataURL` 转为 base64 data URL
-- 导出时保留 data URL，移除 blob URL 和 filePath
-- 导入时 data URL 可直接作为音频源播放
-- `sourceFileName` 作为备用匹配键，支持 `reassociateFiles` 重关联
-
-**导入/导出格式**（JSON）：
-```json
-{
-  "version": 2,
-  "type": "chillfocus-playlist",
-  "playlist": {
-    "id": "...",
-    "name": "我的播放列表",
-    "tracks": [
-      {
-        "name": "歌曲名",
-        "url": "data:audio/mpeg;base64,AAAA...",
-        "sourceFileName": "song.mp3",
-        "duration": 180.5
-      }
-    ]
-  }
-}
-```
 
 ---
 
@@ -182,58 +183,33 @@ onEnded → 查找下一首 → audio.src = nextTrack.url → audio.play()
 #### 数据流
 
 ```
-HTMLAudioElement
-    ↓
-MediaElementAudioSourceNode
-    ↓
-AnalyserNode (fftSize=256, smoothingTimeConstant=0.8)
-    ↓
-getByteFrequencyData() → 128 个频率 bin (0-255)
-    ↓
-Canvas 绘制 64 根频谱条
+HTMLAudioElement → MediaElementAudioSourceNode → AnalyserNode → destination
+                                                       ↓
+                                              getByteFrequencyData (128 bins)
+                                                       ↓
+                                              Canvas 绘制 64 根频谱条
 ```
 
-#### 渲染逻辑
-
-- `requestAnimationFrame` 驱动 60fps 渲染
-- 每根频谱条高度 = `dataArray[i * step] / 255 * canvasHeight`
-- 颜色从底部到顶部线性渐变，颜色随番茄钟阶段变化
-- 使用 `roundRect` 绘制圆角矩形
-
-#### 空闲态
-
-无音频播放时，用 `Math.sin(Date.now()/3000 + i*0.15)` 生成微弱波浪动画。
-
-#### HiDPI 支持
-
-Canvas 尺寸乘以 `devicePixelRatio`，CSS 尺寸保持不变，通过 `ctx.scale()` 缩放。
+- `requestAnimationFrame` 驱动 60fps
+- 颜色随番茄钟阶段变化（紫红/青蓝/绿）
+- 空闲态：`Math.sin()` 生成微弱波浪动画
+- HiDPI：Canvas 尺寸 × `devicePixelRatio`
 
 ---
 
 ### 4. 环境音（AmbientSounds）
 
-#### 音频源
+**音频源**：4 个 ChillPulse 真实音频文件 + 自定义上传（本地/URL）
 
-| 类型 | 来源 | 实现 |
-|------|------|------|
-| 预设（雨声/壁炉/森林/风声） | ChillPulse 真实音频文件 | `<audio>` 元素，`loop: true` |
-| 自定义 | 本地上传 / URL 导入 | 同上 |
+**循环保障**：`audio.loop = true` + `ended` 事件兜底
 
-#### 循环保障
+**持久化**：
+- `chillfocus-custom-sounds`：自定义音效元数据（localStorage）
+- `chillfocus-ambient-volumes`：各音效音量（localStorage）
+- `chillfocus-ambient-active`：正在播放的音效 ID 数组（localStorage）
+- 音频文件存入 IndexedDB（同音乐播放器的 `audioStore`）
 
-```javascript
-audio.loop = true;
-audio.addEventListener('ended', () => {
-  audio.currentTime = 0;
-  audio.play();
-});
-```
-
-双重保障：`loop` 属性 + `ended` 事件兜底。
-
-#### 混合播放
-
-每个环境音独立的 `<audio>` 元素和 `GainNode`，可同时播放多种环境音并独立控制音量。
+**恢复流程**：页面加载 → 解析 IndexedDB 自定义音效 → 读取 active IDs → 自动恢复播放
 
 ---
 
@@ -247,161 +223,84 @@ interface Task {
   text: string;
   completed: boolean;
   priority: 'high' | 'medium' | 'low';
+  color: string;      // 8 色调色板
   createdAt: number;
 }
 ```
 
-#### 功能
-
-- 添加、编辑（双击）、删除、勾选完成
-- 优先级切换（点击圆点，循环 high → medium → low）
+- 三级优先级 + 8 色可视化分类
+- 左侧 3px 彩色边框标识颜色，勾选框使用任务颜色
 - 按完成状态和优先级排序
-- `localStorage` 持久化
+- localStorage 持久化
 
 ---
 
 ### 6. 便签系统（StickyNotes）
 
-#### 设计方案
+**双层渲染**：
+- **浮动层**（`position: fixed`）：不随页面滚动
+- **固定层**（`position: absolute`）：随页面滚动
 
-- **浮动层**：`position: fixed; inset: 0; pointer-events: none`，不阻挡其他模块交互
-- **单个便签**：`pointer-events: auto`，可正常操作
-- **图标**：左下角固定图标，拖拽到任意位置创建便签
-- **显隐切换**：有便签时单击图标切换所有便签的显示/隐藏
+📌 按钮切换状态：浮动 → 固定时坐标从 viewport 转 page，反之亦然。
 
-#### 拖拽创建
+**操作**：拖拽创建、拖拽移动、自定义 resize 手柄（宽高均可）、颜色循环、显隐切换
 
-```
-图标 dragStart → 设置 dataTransfer → document drop → 获取坐标 → 创建便签
-```
-
-#### 拖拽移动
-
-`mousedown` 记录起始位置，`mousemove` 计算偏移更新坐标，`mouseup` 移除监听器。
-
-#### 拉伸
-
-专用 resize 手柄（右下角），`e.stopPropagation()` 阻止冒泡到拖拽处理器。
-
-#### 数据持久化
-
-便签的 `x, y, w, h, text, color` 全部存储在 localStorage。
+**持久化**：`x, y, w, h, text, color, pinned` 全部存储在 localStorage。
 
 ---
 
 ## 全局类型定义
 
 ```typescript
-// 播放模式
 type PlayMode = 'sequential' | 'loop-list' | 'loop-single' | 'shuffle' | 'single';
-
-// 番茄钟阶段
 type TimerPhase = 'focus' | 'short-break' | 'long-break';
 
-// 曲目
 interface Track {
   id: string;
   name: string;
-  url: string;           // blob URL / data URL / 网络 URL
-  filePath?: string;      // Electron 环境下的文件路径
+  url: string;             // blob URL（懒加载）/ 网络 URL
+  fileKey?: string;        // IndexedDB 键
+  filePath?: string;       // Electron 文件路径
   sourceFileName?: string; // 原始文件名，用于重关联
   duration: number;
 }
 
-// 播放列表
-interface Playlist {
-  id: string;
-  name: string;
-  tracks: Track[];
-}
-
-// 番茄钟设置
 interface PomodoroSettings {
   focusDuration: number;
   shortBreakDuration: number;
   longBreakDuration: number;
   roundsBeforeLongBreak: number;
-  notificationSound: string;   // data URL 或 空（使用默认）
-  backgroundImage: string;     // data URL 或 空
+  notificationSound: string;   // data URL 或空（使用默认）
+  backgroundImage: string;     // data URL 或空
   autoLoop: boolean;
   hideTimeDisplay: boolean;
   hideVisualization: boolean;
 }
-
-// 定时播放
-interface PlayTimer {
-  duration: number;
-  remaining: number;
-  waitForTrackEnd: boolean;
-  active: boolean;
-}
 ```
-
----
-
-## 样式架构
-
-### CSS 变量系统
-
-```css
-:root {
-  --bg-main: #0f0f1a;           /* 主背景 */
-  --bg-card: rgba(255,255,255,0.04); /* 卡片背景 */
-  --border: rgba(255,255,255,0.08);  /* 边框 */
-  --accent: #7c5dfa;            /* 主题色 */
-  --text-primary: rgba(255,255,255,0.9);
-  --text-secondary: rgba(255,255,255,0.45);
-}
-```
-
-### 布局
-
-```
-┌──────────────────────────────────────┐
-│  Header (logo)                       │
-├──────────────────────────────────────┤
-│  PomodoroTimer (320px 固定高度)       │
-│  ├ GradientBackground (absolute)     │
-│  ├ SettingsBtn (absolute top-right)  │
-│  ├ Content (centered)                │
-│  │  ├ PhaseLabel                     │
-│  │  ├ ProgressRing                   │
-│  │  └ Controls                       │
-│  └ AudioVisualizer (absolute 62%)    │
-├──────────────────┬───────────────────┤
-│  TaskManager     │  MusicPlayer      │
-│  (280px, 640px)  │  (flex, 640px)    │
-│                  │  ├ PlaylistTabs   │
-│                  │  ├ NowPlaying     │
-│                  │  ├ Controls       │
-│                  │  ├ TrackList      │
-│                  │  ├ AmbientSounds  │
-│                  └───────────────────┤
-├──────────────────────────────────────┤
-│  StickyNotes (fixed overlay)         │
-│  StickyNotesIcon (fixed bottom-left) │
-└──────────────────────────────────────┘
-```
-
-### 响应式
-
-- `max-width: 768px`：底部面板改为单列布局
-- 番茄钟容器高度从 320px 降为 280px
-- 进度环从 200px 降为 160px
 
 ---
 
 ## 数据持久化
 
-所有用户数据通过 `useLocalStorage` hook 存储在浏览器 localStorage 中：
+| 数据 | 存储 | Key |
+|------|------|-----|
+| 任务列表 | localStorage | `chillfocus-tasks` |
+| 便签 | localStorage | `chillfocus-notes` |
+| 番茄钟设置 | localStorage | `chillfocus-pomodoro-settings` |
+| 播放列表结构 | localStorage | `chillfocus-playlists` |
+| 播放器偏好 | localStorage | `chillfocus-player-prefs` |
+| 自定义环境音 | localStorage | `chillfocus-custom-sounds` |
+| 环境音音量 | localStorage | `chillfocus-ambient-volumes` |
+| 活跃环境音 | localStorage | `chillfocus-ambient-active` |
+| 音频文件二进制 | IndexedDB | `chillfocus-audio` / `files` |
 
-| Key | 数据 | 说明 |
-|-----|------|------|
-| `chillfocus-tasks` | Task[] | 任务列表 |
-| `chillfocus-notes` | StickyNote[] | 便签（含位置、大小、颜色） |
-| `chillfocus-pomodoro-settings` | PomodoroSettings | 番茄钟配置 |
+---
 
-播放列表数据存储在组件 state 中（含 data URL），刷新页面后需要重新添加。
+## 支持的音频格式
+
+`mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a`, `opus`, `webm`, `weba`
+
+导入时通过 `audioFormats.ts` 白名单过滤，不支持的格式（如 APE）被静默忽略。
 
 ---
 
@@ -418,7 +317,7 @@ npm run preview  # 预览生产构建
 
 ## 已知限制
 
-1. **大文件内存**：本地音乐以 data URL (base64) 存储在 state 中，大量大文件可能导致内存压力
-2. **播放列表持久化**：刷新页面后播放列表丢失（data URL 在 state 中，未写入 localStorage）
-3. **浏览器兼容**：`roundRect` 需要较新浏览器；OGG 格式在 Safari 中可能不支持
-4. **提示音**：默认提示音使用 Web Audio API 合成，需要用户交互后才能播放（浏览器 autoplay 策略）
+1. **浏览器兼容**：`roundRect` 需要较新浏览器；OGG 格式在 Safari 中可能不支持
+2. **Autoplay 策略**：环境音恢复播放和提示音需要用户先与页面交互
+3. **IndexedDB 容量**：音频文件以原始大小存储，大量大文件可能占用较多磁盘空间
+4. **跨机器导入**：音频文件无法通过 JSON 导出迁移，需手动重新关联

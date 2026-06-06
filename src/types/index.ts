@@ -35,6 +35,7 @@ export interface Task {
   text: string;
   completed: boolean;
   priority: 'high' | 'medium' | 'low';
+  color: string;
   createdAt: number;
 }
 

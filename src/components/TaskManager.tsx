@@ -4,10 +4,13 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { generateId } from '../utils/timeUtils';
 import styles from './TaskManager.module.css';
 
+const TASK_COLORS = ['#7c5dfa', '#ff6b9d', '#ffd43b', '#ff8787', '#74c0fc', '#69db7c', '#da77f2', '#ffa94d'];
+
 export default function TaskManager() {
   const [tasks, setTasks] = useLocalStorage<Task[]>('chillfocus-tasks', []);
   const [newText, setNewText] = useState('');
   const [newPriority, setNewPriority] = useState<Task['priority']>('medium');
+  const [newColor, setNewColor] = useState(TASK_COLORS[0]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -15,7 +18,7 @@ export default function TaskManager() {
   const addTask = () => {
     const text = newText.trim();
     if (!text) return;
-    const task: Task = { id: generateId(), text, completed: false, priority: newPriority, createdAt: Date.now() };
+    const task: Task = { id: generateId(), text, completed: false, priority: newPriority, color: newColor, createdAt: Date.now() };
     setTasks(prev => [...prev, task]);
     setNewText('');
     inputRef.current?.focus();
@@ -52,6 +55,14 @@ export default function TaskManager() {
     }));
   };
 
+  const cycleColor = (id: string) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const idx = TASK_COLORS.indexOf(t.color || TASK_COLORS[0]);
+      return { ...t, color: TASK_COLORS[(idx + 1) % TASK_COLORS.length] };
+    }));
+  };
+
   const sortedTasks = [...tasks].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     const pOrder = { high: 0, medium: 1, low: 2 };
@@ -85,6 +96,15 @@ export default function TaskManager() {
           onKeyDown={e => e.key === 'Enter' && addTask()}
         />
         <button
+          className={styles.colorPickBtn}
+          onClick={() => {
+            const idx = TASK_COLORS.indexOf(newColor);
+            setNewColor(TASK_COLORS[(idx + 1) % TASK_COLORS.length]);
+          }}
+          title="颜色"
+          style={{ backgroundColor: newColor }}
+        />
+        <button
           className={`${styles.priorityBtn} ${styles[`priority-${newPriority}`]}`}
           onClick={() => {
             const order: Task['priority'][] = ['medium', 'high', 'low'];
@@ -102,10 +122,15 @@ export default function TaskManager() {
 
       <ul className={styles.list}>
         {sortedTasks.map(task => (
-          <li key={task.id} className={`${styles.item} ${task.completed ? styles.itemDone : ''}`}>
+          <li
+            key={task.id}
+            className={`${styles.item} ${task.completed ? styles.itemDone : ''}`}
+            style={{ borderLeftColor: task.color || TASK_COLORS[0] }}
+          >
             <button
               className={`${styles.checkbox} ${task.completed ? styles.checked : ''}`}
               onClick={() => toggleTask(task.id)}
+              style={task.completed ? { backgroundColor: task.color || TASK_COLORS[0], borderColor: task.color || TASK_COLORS[0] } : undefined}
             >
               {task.completed && (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
@@ -126,6 +151,13 @@ export default function TaskManager() {
                 {task.text}
               </span>
             )}
+
+            <button
+              className={styles.colorDot}
+              onClick={() => cycleColor(task.id)}
+              title="换色"
+              style={{ backgroundColor: task.color || TASK_COLORS[0] }}
+            />
 
             <button
               className={`${styles.priorityDot} ${styles[`priority-${task.priority}`]}`}

@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
+import { filterAudioFiles } from '../utils/audioFormats';
 import styles from './MusicPlayer.module.css';
 
 interface Props {
@@ -81,14 +82,14 @@ export default function MusicPlayer({
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = filterAudioFiles(Array.from(e.target.files || []));
     if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [activePlaylistId, onAddTracks]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/'));
+    const files = filterAudioFiles(Array.from(e.dataTransfer.files));
     if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
   }, [activePlaylistId, onAddTracks]);
 
@@ -121,8 +122,7 @@ export default function MusicPlayer({
   }, [onImportPlaylists]);
 
   const handleReassociateFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const allFiles = Array.from(e.target.files || []);
-    const audioFiles = allFiles.filter(f => /\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|webm)$/i.test(f.name));
+    const audioFiles = filterAudioFiles(Array.from(e.target.files || []));
     if (audioFiles.length && activePlaylistId) onReassociateFiles(activePlaylistId, audioFiles);
     if (reassociateInputRef.current) reassociateInputRef.current.value = '';
   }, [activePlaylistId, onReassociateFiles]);
