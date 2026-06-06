@@ -29,6 +29,7 @@ interface Props {
   onPlayTrack: (playlistId: string, track: Track) => void;
   onExportPlaylists: (ids: string[]) => void;
   onImportPlaylists: (file: File) => void;
+  onReassociateFiles: (playlistId: string, files: File[]) => void;
   onStartPlayTimer: (minutes: number, waitForTrackEnd: boolean) => void;
   onCancelPlayTimer: () => void;
 }
@@ -56,9 +57,10 @@ export default function MusicPlayer({
   onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetPlayMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
   onAddTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
-  onExportPlaylists, onImportPlaylists, onStartPlayTimer, onCancelPlayTimer,
+  onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reassociateInputRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const trackListRef = useRef<HTMLDivElement>(null);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
@@ -117,6 +119,14 @@ export default function MusicPlayer({
     if (file) onImportPlaylists(file);
     if (importFileRef.current) importFileRef.current.value = '';
   }, [onImportPlaylists]);
+
+  const handleReassociateFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length && activePlaylistId) onReassociateFiles(activePlaylistId, files);
+    if (reassociateInputRef.current) reassociateInputRef.current.value = '';
+  }, [activePlaylistId, onReassociateFiles]);
+
+  const hasUnresolvedTracks = activePlaylist?.tracks.some(t => !t.url && !t.fileKey) ?? false;
 
   const toggleExportSelect = useCallback((id: string) => {
     setExportSelected(prev => {
@@ -292,6 +302,12 @@ export default function MusicPlayer({
       <div className={styles.trackListWrap} ref={trackListRef} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
         <div className={styles.trackListHeader}>
           <span>{activePlaylist ? `${activePlaylist.tracks.length} 首曲目` : '选择播放列表'}</span>
+          {hasUnresolvedTracks && (
+            <button className={styles.reassociateBtn} onClick={() => reassociateInputRef.current?.click()}>
+              📂 重新关联文件
+            </button>
+          )}
+          <input ref={reassociateInputRef} type="file" accept="audio/*" multiple style={{ display: 'none' }} onChange={handleReassociateFile} />
           <div className={styles.addMusicWrap}>
             <button className={styles.uploadBtn} onClick={() => setShowAddMenu(!showAddMenu)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>

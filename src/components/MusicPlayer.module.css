@@ -338,13 +338,11 @@
 
 .trackListWrap {
   position: relative;
-  flex: 1;
   overflow-y: auto;
   border-radius: 10px;
   border: 1px dashed var(--border);
   padding: 8px;
-  min-height: 80px;
-  max-height: 220px;
+  height: 200px;
   transition: border-color 0.2s;
 }
 
@@ -359,6 +357,23 @@
   font-size: 11px;
   color: var(--text-secondary);
   margin-bottom: 6px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.reassociateBtn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 180, 50, 0.4);
+  background: rgba(255, 180, 50, 0.08);
+  color: #ffb432;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reassociateBtn:hover {
+  background: rgba(255, 180, 50, 0.15);
 }
 
 .uploadBtn {

@@ -33,71 +33,57 @@ export function usePomodoro() {
     totalRounds: settings.roundsBeforeLongBreak,
   });
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const notifAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isRunningRef = useRef(false);
   const settingsRef = useRef(settings);
-  const isRunningRef = useRef(state.isRunning);
+  const notifAudioRef = useRef<HTMLAudioElement | null>(null);
   settingsRef.current = settings;
-  isRunningRef.current = state.isRunning;
 
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  const getDuration = useCallback((phase: TimerPhase, s = settings) => {
+  const getDuration = useCallback((phase: TimerPhase, s?: PomodoroSettings) => {
+    const cfg = s ?? settingsRef.current;
     switch (phase) {
-      case 'focus': return s.focusDuration;
-      case 'short-break': return s.shortBreakDuration;
-      case 'long-break': return s.longBreakDuration;
-    }
-  }, [settings]);
-
-  const nextPhase = useCallback((currentPhase: TimerPhase, round: number, s = settings): { phase: TimerPhase; nextRound: number } => {
-    if (currentPhase === 'focus') {
-      if (round >= s.roundsBeforeLongBreak) return { phase: 'long-break', nextRound: 1 };
-      return { phase: 'short-break', nextRound: round };
-    }
-    if (currentPhase === 'short-break') return { phase: 'focus', nextRound: round + 1 };
-    return { phase: 'focus', nextRound: 1 };
-  }, [settings]);
-
-  const playNotification = useCallback(() => {
-    const s = settingsRef.current;
-    if (s.notificationSound) {
-      try {
-        if (notifAudioRef.current) {
-          notifAudioRef.current.pause();
-          notifAudioRef.current.currentTime = 0;
-        }
-        const audio = new Audio(s.notificationSound);
-        audio.volume = 0.6;
-        audio.play().catch(() => {});
-        notifAudioRef.current = audio;
-      } catch { /* ignore */ }
-    } else {
-      playDefaultNotification();
+      case 'focus': return cfg.focusDuration;
+      case 'short-break': return cfg.shortBreakDuration;
+      case 'long-break': return cfg.longBreakDuration;
     }
   }, []);
 
+  // Single persistent interval — never recreated
   useEffect(() => {
-    if (intervalRef.current) return;
-
-    intervalRef.current = setInterval(() => {
+    const id = setInterval(() => {
       if (!isRunningRef.current) return;
 
       setState(prev => {
         if (prev.timeLeft <= 1) {
-          playNotification();
+          // Play notification
           const s = settingsRef.current;
-          const { phase: nextP, nextRound } = nextPhase(prev.phase, prev.currentRound, s);
-          const nextDuration = getDuration(nextP, s);
+          if (s.notificationSound) {
+            try {
+              if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
+              const audio = new Audio(s.notificationSound);
+              audio.volume = 0.6;
+              audio.play().catch(() => {});
+              notifAudioRef.current = audio;
+            } catch { /* ignore */ }
+          } else {
+            playDefaultNotification();
+          }
+
+          // Next phase
+          let nextP: TimerPhase;
+          let nextRound: number;
+          if (prev.phase === 'focus') {
+            if (prev.currentRound >= s.roundsBeforeLongBreak) { nextP = 'long-break'; nextRound = 1; }
+            else { nextP = 'short-break'; nextRound = prev.currentRound; }
+          } else if (prev.phase === 'short-break') {
+            nextP = 'focus'; nextRound = prev.currentRound + 1;
+          } else {
+            nextP = 'focus'; nextRound = 1;
+          }
+
           return {
             ...prev,
             phase: nextP,
-            timeLeft: nextDuration,
+            timeLeft: getDuration(nextP, s),
             isRunning: s.autoLoop,
             currentRound: nextRound,
           };
@@ -106,61 +92,57 @@ export function usePomodoro() {
       });
     }, 1000);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [playNotification, nextPhase, getDuration]);
+    return () => clearInterval(id);
+  }, [getDuration]);
 
   const start = useCallback(() => {
+    isRunningRef.current = true;
     setState(prev => ({ ...prev, isRunning: true }));
   }, []);
 
   const pause = useCallback(() => {
-    clearTimer();
+    isRunningRef.current = false;
     setState(prev => ({ ...prev, isRunning: false }));
-  }, [clearTimer]);
+  }, []);
 
   const reset = useCallback(() => {
-    clearTimer();
+    isRunningRef.current = false;
     setState({
       phase: 'focus',
-      timeLeft: settings.focusDuration,
+      timeLeft: settingsRef.current.focusDuration,
       isRunning: false,
       currentRound: 1,
-      totalRounds: settings.roundsBeforeLongBreak,
+      totalRounds: settingsRef.current.roundsBeforeLongBreak,
     });
-  }, [clearTimer, settings.focusDuration, settings.roundsBeforeLongBreak]);
+  }, []);
 
   const skip = useCallback(() => {
-    clearTimer();
+    isRunningRef.current = false;
     setState(prev => {
-      const { phase: nextP, nextRound } = nextPhase(prev.phase, prev.currentRound);
-      return {
-        ...prev,
-        phase: nextP,
-        timeLeft: getDuration(nextP),
-        isRunning: false,
-        currentRound: nextRound,
-      };
+      const s = settingsRef.current;
+      let nextP: TimerPhase;
+      let nextRound: number;
+      if (prev.phase === 'focus') {
+        if (prev.currentRound >= s.roundsBeforeLongBreak) { nextP = 'long-break'; nextRound = 1; }
+        else { nextP = 'short-break'; nextRound = prev.currentRound; }
+      } else if (prev.phase === 'short-break') {
+        nextP = 'focus'; nextRound = prev.currentRound + 1;
+      } else {
+        nextP = 'focus'; nextRound = 1;
+      }
+      return { ...prev, phase: nextP, timeLeft: getDuration(nextP, s), isRunning: false, currentRound: nextRound };
     });
-  }, [clearTimer, nextPhase, getDuration]);
+  }, [getDuration]);
 
   const updateSettings = useCallback((partial: Partial<PomodoroSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...partial };
-      if (!state.isRunning) {
-        setState(s => ({
-          ...s,
-          timeLeft: getDuration(s.phase, next),
-          totalRounds: next.roundsBeforeLongBreak,
-        }));
+      if (!isRunningRef.current) {
+        setState(s => ({ ...s, timeLeft: getDuration(s.phase, next), totalRounds: next.roundsBeforeLongBreak }));
       }
       return next;
     });
-  }, [setSettings, state.isRunning, getDuration]);
+  }, [setSettings, getDuration]);
 
   const progress = 1 - state.timeLeft / getDuration(state.phase);
 

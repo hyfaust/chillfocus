@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { generateId } from '../utils/timeUtils';
+import { saveAudioFile, getAudioFile, deleteAudioFile } from '../utils/audioStore';
 
 interface AudioPlayerState {
   playlists: Playlist[];
@@ -16,19 +17,46 @@ interface AudioPlayerState {
   playTimer: PlayTimer;
 }
 
+const STORAGE_KEY = 'chillfocus-playlists';
+
+function loadPlaylistsFromStorage(): Playlist[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data.map((p: Playlist) => ({
+      ...p,
+      tracks: p.tracks.map((t: Track) => ({ ...t, url: '' })),
+    })) : [];
+  } catch { return []; }
+}
+
+function savePlaylistsToStorage(playlists: Playlist[]) {
+  try {
+    const serializable = playlists.map(p => ({
+      ...p,
+      tracks: p.tracks.map(t => ({ ...t, url: '' })),
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  } catch { /* quota exceeded */ }
+}
+
 export function useAudioPlayer() {
-  const [state, setState] = useState<AudioPlayerState>({
-    playlists: [],
-    activePlaylistId: null,
-    currentTrack: null,
-    isPlaying: false,
-    currentTime: 0,
-    duration: 0,
-    volume: 0.7,
-    playMode: 'sequential',
-    shuffleOrder: [],
-    shuffleIndex: 0,
-    playTimer: { duration: 0, remaining: 0, waitForTrackEnd: false, active: false },
+  const [state, setState] = useState<AudioPlayerState>(() => {
+    const playlists = loadPlaylistsFromStorage();
+    return {
+      playlists,
+      activePlaylistId: playlists[0]?.id ?? null,
+      currentTrack: null,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      volume: 0.7,
+      playMode: 'sequential',
+      shuffleOrder: [],
+      shuffleIndex: 0,
+      playTimer: { duration: 0, remaining: 0, waitForTrackEnd: false, active: false },
+    };
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -38,6 +66,11 @@ export function useAudioPlayer() {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Persist playlists to localStorage whenever they change
+  useEffect(() => {
+    savePlaylistsToStorage(state.playlists);
+  }, [state.playlists]);
 
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
@@ -71,17 +104,41 @@ export function useAudioPlayer() {
     return order;
   }, []);
 
-  const playTrack = useCallback((track: Track) => {
+  // Resolve track URL from IndexedDB if needed
+  const resolveTrackUrl = useCallback(async (track: Track): Promise<string> => {
+    if (track.url && !track.url.startsWith('blob:')) return track.url;
+    if (track.fileKey) {
+      const file = await getAudioFile(track.fileKey);
+      if (file) {
+        const url = URL.createObjectURL(file);
+        setState(prev => ({
+          ...prev,
+          playlists: prev.playlists.map(p => ({
+            ...p,
+            tracks: p.tracks.map(t => t.id === track.id ? { ...t, url } : t),
+          })),
+          currentTrack: prev.currentTrack?.id === track.id ? { ...prev.currentTrack, url } : prev.currentTrack,
+        }));
+        return url;
+      }
+    }
+    return track.url || '';
+  }, []);
+
+  const playTrack = useCallback(async (track: Track) => {
     const audio = getAudio();
-    audio.src = track.url;
+    let url = track.url;
+    if (!url || url.startsWith('blob:')) {
+      url = await resolveTrackUrl(track);
+    }
+    if (!url) return;
+    audio.src = url;
     audio.play().catch(() => {});
-    setState(prev => ({ ...prev, currentTrack: track, isPlaying: true, currentTime: 0 }));
-  }, [getAudio]);
+    setState(prev => ({ ...prev, currentTrack: { ...track, url }, isPlaying: true, currentTime: 0 }));
+  }, [getAudio, resolveTrackUrl]);
 
   const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single' || mode === 'single') {
-      return { index: currentIndex, newShuffleIdx: shuffleIdx };
-    }
+    if (mode === 'loop-single' || mode === 'single') return { index: currentIndex, newShuffleIdx: shuffleIdx };
     if (mode === 'shuffle') {
       let nextShuffleIdx = shuffleIdx + 1;
       if (nextShuffleIdx >= shuffleOrd.length) nextShuffleIdx = 0;
@@ -96,9 +153,7 @@ export function useAudioPlayer() {
   }, []);
 
   const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single' || mode === 'single') {
-      return { index: currentIndex, newShuffleIdx: shuffleIdx };
-    }
+    if (mode === 'loop-single' || mode === 'single') return { index: currentIndex, newShuffleIdx: shuffleIdx };
     if (mode === 'shuffle') {
       let prevShuffleIdx = shuffleIdx - 1;
       if (prevShuffleIdx < 0) prevShuffleIdx = shuffleOrd.length - 1;
@@ -112,48 +167,26 @@ export function useAudioPlayer() {
     return { index: prev, newShuffleIdx: 0 };
   }, []);
 
-  // Audio event listeners
+  // Audio ended handler
   useEffect(() => {
     const audio = getAudio();
-    const onTimeUpdate = () => {
-      setState(prev => ({ ...prev, currentTime: audio.currentTime }));
-    };
-    const onLoadedMetadata = () => {
-      setState(prev => ({ ...prev, duration: audio.duration }));
-    };
-    const onEnded = () => {
+    const onTimeUpdate = () => setState(prev => ({ ...prev, currentTime: audio.currentTime }));
+    const onLoadedMetadata = () => setState(prev => ({ ...prev, duration: audio.duration }));
+    const onEnded = async () => {
       const s = stateRef.current;
       const playlist = s.playlists.find(p => p.id === s.activePlaylistId);
-      if (!playlist || !s.currentTrack) {
-        setState(prev => ({ ...prev, isPlaying: false }));
-        return;
-      }
-
-      // single mode: stop after track ends
-      if (s.playMode === 'single') {
-        setState(prev => ({ ...prev, isPlaying: false }));
-        return;
-      }
-
+      if (!playlist || !s.currentTrack) { setState(prev => ({ ...prev, isPlaying: false })); return; }
+      if (s.playMode === 'single') { setState(prev => ({ ...prev, isPlaying: false })); return; }
       const idx = playlist.tracks.findIndex(t => t.id === s.currentTrack!.id);
       const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.playMode, s.shuffleIndex, s.shuffleOrder);
-      if (nextIdx < 0 || nextIdx >= playlist.tracks.length) {
-        setState(prev => ({ ...prev, isPlaying: false }));
-        return;
-      }
-
+      if (nextIdx < 0 || nextIdx >= playlist.tracks.length) { setState(prev => ({ ...prev, isPlaying: false })); return; }
       const nextTrack = playlist.tracks[nextIdx];
-      audio.src = nextTrack.url;
+      const url = await resolveTrackUrl(nextTrack);
+      if (!url) { setState(prev => ({ ...prev, isPlaying: false })); return; }
+      audio.src = url;
       audio.play().catch(() => {});
-      setState(prev => ({
-        ...prev,
-        currentTrack: nextTrack,
-        isPlaying: true,
-        currentTime: 0,
-        shuffleIndex: newShuffleIdx,
-      }));
+      setState(prev => ({ ...prev, currentTrack: { ...nextTrack, url }, isPlaying: true, currentTime: 0, shuffleIndex: newShuffleIdx }));
     };
-
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
@@ -162,52 +195,29 @@ export function useAudioPlayer() {
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [getAudio, getNextTrackIndex]);
+  }, [getAudio, getNextTrackIndex, resolveTrackUrl]);
 
-  useEffect(() => {
-    const audio = getAudio();
-    audio.volume = state.volume;
-  }, [state.volume, getAudio]);
+  useEffect(() => { getAudio().volume = state.volume; }, [state.volume, getAudio]);
 
-  // Play timer countdown
+  // Play timer
   useEffect(() => {
     if (!state.playTimer.active || !state.isPlaying) {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+      if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
       return;
     }
     timerIntervalRef.current = setInterval(() => {
       setState(prev => {
         const remaining = prev.playTimer.remaining - 1;
         if (remaining <= 0) {
-          if (prev.playTimer.waitForTrackEnd) {
-            return { ...prev, playTimer: { ...prev.playTimer, remaining: 0, active: false } };
-          }
-          const audio = getAudio();
-          audio.pause();
+          if (prev.playTimer.waitForTrackEnd) return { ...prev, playTimer: { ...prev.playTimer, remaining: 0, active: false } };
+          getAudio().pause();
           return { ...prev, isPlaying: false, playTimer: { ...prev.playTimer, remaining: 0, active: false } };
         }
         return { ...prev, playTimer: { ...prev.playTimer, remaining } };
       });
     }, 1000);
-    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+    return () => { if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; } };
   }, [state.playTimer.active, state.isPlaying, getAudio]);
-
-  // Check waitForTrackEnd on track end
-  useEffect(() => {
-    const audio = getAudio();
-    const checkTimer = () => {
-      const s = stateRef.current;
-      if (s.playTimer.active && s.playTimer.remaining <= 0 && s.playTimer.waitForTrackEnd) {
-        audio.pause();
-        setState(prev => ({ ...prev, isPlaying: false, playTimer: { ...prev.playTimer, active: false } }));
-      }
-    };
-    audio.addEventListener('ended', checkTimer);
-    return () => audio.removeEventListener('ended', checkTimer);
-  }, [getAudio]);
 
   const createPlaylist = useCallback((name: string) => {
     const playlist: Playlist = { id: generateId(), name, tracks: [] };
@@ -221,18 +231,15 @@ export function useAudioPlayer() {
   const deletePlaylist = useCallback((id: string) => {
     setState(prev => {
       const playlists = prev.playlists.filter(p => p.id !== id);
-      const activePlaylistId = prev.activePlaylistId === id
-        ? (playlists[0]?.id ?? null)
-        : prev.activePlaylistId;
-      return { ...prev, playlists, activePlaylistId };
+      // Clean up IndexedDB files for deleted playlist
+      const deleted = prev.playlists.find(p => p.id === id);
+      if (deleted) deleted.tracks.forEach(t => { if (t.fileKey) deleteAudioFile(t.fileKey); });
+      return { ...prev, playlists, activePlaylistId: prev.activePlaylistId === id ? (playlists[0]?.id ?? null) : prev.activePlaylistId };
     });
   }, []);
 
   const renamePlaylist = useCallback((id: string, name: string) => {
-    setState(prev => ({
-      ...prev,
-      playlists: prev.playlists.map(p => p.id === id ? { ...p, name } : p),
-    }));
+    setState(prev => ({ ...prev, playlists: prev.playlists.map(p => p.id === id ? { ...p, name } : p) }));
   }, []);
 
   const setActivePlaylist = useCallback((id: string) => {
@@ -240,37 +247,35 @@ export function useAudioPlayer() {
   }, []);
 
   const addTracksToPlaylist = useCallback((playlistId: string, files: File[]) => {
-    const newTracks: Track[] = files.map(file => ({
-      id: generateId(),
-      name: file.name.replace(/\.[^/.]+$/, ''),
-      url: '',
-      filePath: (file as any).path || '',
-      sourceFileName: file.name,
-      duration: 0,
-    }));
-
-    newTracks.forEach((track, i) => {
-      const file = files[i];
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        track.url = dataUrl;
-        const audio = new Audio(dataUrl);
-        audio.addEventListener('loadedmetadata', () => {
-          track.duration = audio.duration;
-          setState(prev => ({
-            ...prev,
-            playlists: prev.playlists.map(p =>
-              p.id === playlistId
-                ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, url: dataUrl, duration: audio.duration } : t) }
-                : p
-            ),
-          }));
-        });
+    const newTracks: Track[] = files.map(file => {
+      const fileKey = `audio_${generateId()}`;
+      saveAudioFile(fileKey, file);
+      return {
+        id: generateId(),
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: '',
+        fileKey,
+        sourceFileName: file.name,
+        duration: 0,
       };
-      reader.readAsDataURL(file);
     });
-
+    // Get durations
+    newTracks.forEach(async (track) => {
+      const file = await getAudioFile(track.fileKey!);
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        track.duration = audio.duration;
+        URL.revokeObjectURL(url);
+        setState(prev => ({
+          ...prev,
+          playlists: prev.playlists.map(p =>
+            p.id === playlistId ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) } : p
+          ),
+        }));
+      });
+    });
     setState(prev => ({
       ...prev,
       playlists: prev.playlists.map(p =>
@@ -292,9 +297,7 @@ export function useAudioPlayer() {
       setState(prev => ({
         ...prev,
         playlists: prev.playlists.map(p =>
-          p.id === playlistId
-            ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) }
-            : p
+          p.id === playlistId ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) } : p
         ),
       }));
     });
@@ -307,38 +310,38 @@ export function useAudioPlayer() {
   }, []);
 
   const removeTrackFromPlaylist = useCallback((playlistId: string, trackId: string) => {
-    setState(prev => ({
-      ...prev,
-      playlists: prev.playlists.map(p =>
-        p.id === playlistId ? { ...p, tracks: p.tracks.filter(t => t.id !== trackId) } : p
-      ),
-      currentTrack: prev.currentTrack?.id === trackId ? null : prev.currentTrack,
-    }));
+    setState(prev => {
+      const playlist = prev.playlists.find(p => p.id === playlistId);
+      const track = playlist?.tracks.find(t => t.id === trackId);
+      if (track?.fileKey) deleteAudioFile(track.fileKey);
+      return {
+        ...prev,
+        playlists: prev.playlists.map(p => p.id === playlistId ? { ...p, tracks: p.tracks.filter(t => t.id !== trackId) } : p),
+        currentTrack: prev.currentTrack?.id === trackId ? null : prev.currentTrack,
+      };
+    });
   }, []);
 
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     const audio = getAudio();
     if (state.currentTrack) {
+      if (!state.currentTrack.url || state.currentTrack.url.startsWith('blob:')) {
+        const url = await resolveTrackUrl(state.currentTrack);
+        if (url) audio.src = url;
+      }
       audio.play().catch(() => {});
       setState(prev => ({ ...prev, isPlaying: true }));
     } else {
       const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
       if (playlist && playlist.tracks.length > 0) playTrack(playlist.tracks[0]);
     }
-  }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playTrack]);
+  }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playTrack, resolveTrackUrl]);
 
-  const pause = useCallback(() => {
-    const audio = getAudio();
-    audio.pause();
-    setState(prev => ({ ...prev, isPlaying: false }));
-  }, [getAudio]);
+  const pause = useCallback(() => { getAudio().pause(); setState(prev => ({ ...prev, isPlaying: false })); }, [getAudio]);
 
-  const togglePlay = useCallback(() => {
-    if (state.isPlaying) pause();
-    else play();
-  }, [state.isPlaying, play, pause]);
+  const togglePlay = useCallback(() => { if (state.isPlaying) pause(); else play(); }, [state.isPlaying, play, pause]);
 
-  const next = useCallback(() => {
+  const next = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
     if (!playlist || !state.currentTrack) return;
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
@@ -349,7 +352,7 @@ export function useAudioPlayer() {
     }
   }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack]);
 
-  const prev = useCallback(() => {
+  const prev = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
     if (!playlist || !state.currentTrack) return;
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
@@ -360,15 +363,9 @@ export function useAudioPlayer() {
     }
   }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack]);
 
-  const seek = useCallback((time: number) => {
-    const audio = getAudio();
-    audio.currentTime = time;
-    setState(prev => ({ ...prev, currentTime: time }));
-  }, [getAudio]);
+  const seek = useCallback((time: number) => { getAudio().currentTime = time; setState(prev => ({ ...prev, currentTime: time })); }, [getAudio]);
 
-  const setVolume = useCallback((vol: number) => {
-    setState(prev => ({ ...prev, volume: Math.max(0, Math.min(1, vol)) }));
-  }, []);
+  const setVolume = useCallback((vol: number) => { setState(prev => ({ ...prev, volume: Math.max(0, Math.min(1, vol)) })); }, []);
 
   const setPlayMode = useCallback((mode: PlayMode) => {
     setState(prev => {
@@ -405,13 +402,10 @@ export function useAudioPlayer() {
     playTrack(track);
   }, [playTrack, generateShuffleOrder]);
 
+  // Export/Import
   const sanitizeTrack = (t: Track): Track => ({
-    id: t.id,
-    name: t.name,
-    url: '',
-    filePath: '',
-    sourceFileName: t.sourceFileName || t.name,
-    duration: t.duration,
+    id: t.id, name: t.name, url: '', fileKey: '', filePath: '',
+    sourceFileName: t.sourceFileName || t.name, duration: t.duration,
   });
 
   const triggerDownload = (data: object, filename: string) => {
@@ -419,8 +413,7 @@ export function useAudioPlayer() {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
+    a.href = url; a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -430,21 +423,17 @@ export function useAudioPlayer() {
   const exportPlaylist = useCallback((playlistId: string) => {
     const playlist = state.playlists.find(p => p.id === playlistId);
     if (!playlist) return;
-    triggerDownload(
-      { version: 2, type: 'chillfocus-playlist', playlist: { ...playlist, tracks: playlist.tracks.map(sanitizeTrack) } },
-      `${playlist.name}.json`
-    );
+    triggerDownload({ version: 3, type: 'chillfocus-playlist', playlist: { ...playlist, tracks: playlist.tracks.map(sanitizeTrack) } }, `${playlist.name}.json`);
   }, [state.playlists]);
 
   const exportPlaylists = useCallback((playlistIds: string[]) => {
     const toExport = state.playlists.filter(p => playlistIds.includes(p.id));
     if (toExport.length === 0) return;
     const sanitize = (p: Playlist) => ({ ...p, tracks: p.tracks.map(sanitizeTrack) });
-    const exportData = toExport.length === 1
-      ? { version: 2, type: 'chillfocus-playlist', playlist: sanitize(toExport[0]) }
-      : { version: 2, type: 'chillfocus-playlists', playlists: toExport.map(sanitize) };
-    const filename = toExport.length === 1 ? `${toExport[0].name}.json` : 'chillfocus-playlists.json';
-    triggerDownload(exportData, filename);
+    const data = toExport.length === 1
+      ? { version: 3, type: 'chillfocus-playlist', playlist: sanitize(toExport[0]) }
+      : { version: 3, type: 'chillfocus-playlists', playlists: toExport.map(sanitize) };
+    triggerDownload(data, toExport.length === 1 ? `${toExport[0].name}.json` : 'chillfocus-playlists.json');
   }, [state.playlists]);
 
   const importPlaylists = useCallback((file: File) => {
@@ -455,27 +444,14 @@ export function useAudioPlayer() {
         const importOne = (p: Playlist) => ({
           ...p,
           id: generateId(),
-          tracks: p.tracks.map((t: Track) => ({
-            ...t,
-            id: generateId(),
-            url: t.filePath ? `file:///${t.filePath.replace(/\\/g, '/')}` : (t.url || ''),
-            sourceFileName: t.sourceFileName || t.name,
-          })),
+          tracks: p.tracks.map((t: Track) => ({ ...t, id: generateId(), url: '', fileKey: '' })),
         });
         if (data.type === 'chillfocus-playlist' && data.playlist) {
           const playlist = importOne(data.playlist);
-          setState(prev => ({
-            ...prev,
-            playlists: [...prev.playlists, playlist],
-            activePlaylistId: prev.activePlaylistId ?? playlist.id,
-          }));
+          setState(prev => ({ ...prev, playlists: [...prev.playlists, playlist], activePlaylistId: prev.activePlaylistId ?? playlist.id }));
         } else if (data.type === 'chillfocus-playlists' && data.playlists) {
           const newPlaylists = data.playlists.map(importOne);
-          setState(prev => ({
-            ...prev,
-            playlists: [...prev.playlists, ...newPlaylists],
-            activePlaylistId: prev.activePlaylistId ?? newPlaylists[0]?.id ?? null,
-          }));
+          setState(prev => ({ ...prev, playlists: [...prev.playlists, ...newPlaylists], activePlaylistId: prev.activePlaylistId ?? newPlaylists[0]?.id ?? null }));
         }
       } catch { /* invalid */ }
     };
@@ -483,68 +459,40 @@ export function useAudioPlayer() {
   }, []);
 
   const reassociateFiles = useCallback((playlistId: string, files: File[]) => {
+    const fileMap = new Map(files.map(f => [f.name, f]));
     setState(prev => {
       const playlist = prev.playlists.find(p => p.id === playlistId);
       if (!playlist) return prev;
-      const fileMap = new Map(files.map(f => [f.name, f]));
       const updatedTracks = playlist.tracks.map(t => {
         if (t.url && !t.url.startsWith('blob:')) return t;
-        const matchKey = t.sourceFileName || (t.name + '.mp3');
-        const file = fileMap.get(matchKey) || files.find(f => f.name.replace(/\.[^/.]+$/, '') === t.name);
+        const matchKey = t.sourceFileName || t.name;
+        const file = fileMap.get(matchKey) || fileMap.get(matchKey + '.mp3') || files.find(f => f.name.replace(/\.[^/.]+$/, '') === t.name);
         if (file) {
-          return { ...t, url: URL.createObjectURL(file), sourceFileName: file.name };
+          const fileKey = t.fileKey || `audio_${generateId()}`;
+          saveAudioFile(fileKey, file);
+          return { ...t, fileKey, sourceFileName: file.name, url: '' };
         }
         return t;
       });
-      return {
-        ...prev,
-        playlists: prev.playlists.map(p =>
-          p.id === playlistId ? { ...p, tracks: updatedTracks } : p
-        ),
-      };
+      return { ...prev, playlists: prev.playlists.map(p => p.id === playlistId ? { ...p, tracks: updatedTracks } : p) };
     });
   }, []);
 
   const startPlayTimer = useCallback((minutes: number, waitForTrackEnd: boolean) => {
-    setState(prev => ({
-      ...prev,
-      playTimer: { duration: minutes * 60, remaining: minutes * 60, waitForTrackEnd, active: true },
-    }));
+    setState(prev => ({ ...prev, playTimer: { duration: minutes * 60, remaining: minutes * 60, waitForTrackEnd, active: true } }));
   }, []);
 
   const cancelPlayTimer = useCallback(() => {
-    setState(prev => ({
-      ...prev,
-      playTimer: { ...prev.playTimer, active: false, remaining: 0 },
-    }));
+    setState(prev => ({ ...prev, playTimer: { ...prev.playTimer, active: false, remaining: 0 } }));
   }, []);
 
   return {
-    ...state,
-    audioRef,
-    getAnalyser,
-    createPlaylist,
-    deletePlaylist,
-    renamePlaylist,
-    setActivePlaylist,
-    addTracksToPlaylist,
-    addUrlTrackToPlaylist,
-    removeTrackFromPlaylist,
-    play,
-    pause,
-    togglePlay,
-    next,
-    prev,
-    seek,
-    setVolume,
-    setPlayMode,
-    playSpecificTrack,
-    playTrack,
-    exportPlaylist,
-    exportPlaylists,
-    importPlaylists,
-    reassociateFiles,
-    startPlayTimer,
-    cancelPlayTimer,
+    ...state, audioRef, getAnalyser,
+    createPlaylist, deletePlaylist, renamePlaylist, setActivePlaylist,
+    addTracksToPlaylist, addUrlTrackToPlaylist, removeTrackFromPlaylist,
+    play, pause, togglePlay, next, prev, seek, setVolume, setPlayMode,
+    playSpecificTrack, playTrack,
+    exportPlaylist, exportPlaylists, importPlaylists, reassociateFiles,
+    startPlayTimer, cancelPlayTimer,
   };
 }

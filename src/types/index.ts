@@ -2,6 +2,7 @@ export interface Track {
   id: string;
   name: string;
   url: string;
+  fileKey?: string;
   filePath?: string;
   sourceFileName?: string;
   duration: number;

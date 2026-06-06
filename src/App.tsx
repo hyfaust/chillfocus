@@ -74,6 +74,7 @@ function App() {
               onPlayTrack={(plId, track) => { ensureAnalyser(); player.playSpecificTrack(plId, track); }}
               onExportPlaylists={player.exportPlaylists}
               onImportPlaylists={player.importPlaylists}
+              onReassociateFiles={player.reassociateFiles}
               onStartPlayTimer={player.startPlayTimer}
               onCancelPlayTimer={player.cancelPlayTimer}
             />
