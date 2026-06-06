@@ -470,7 +470,7 @@
 
 .backToTopBtn {
   position: sticky;
-  bottom: 8px;
+  bottom: -8px;
   left: 100%;
   transform: translateX(-100%);
   width: 28px;

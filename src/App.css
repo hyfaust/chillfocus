@@ -34,6 +34,17 @@
   background-clip: text;
 }
 
+.github-link {
+  color: var(--text-secondary);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.github-link:hover {
+  color: var(--text-primary);
+}
+
 /* Main */
 .app-main {
   flex: 1;

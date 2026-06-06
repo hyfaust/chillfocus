@@ -66,7 +66,7 @@ export function usePomodoro() {
           } else {
             try {
               if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
-              const audio = new Audio('/sounds/notification.mp3');
+              const audio = new Audio(`${import.meta.env.BASE_URL}sounds/notification.mp3`);
               audio.volume = 0.6;
               audio.play().catch(() => {});
               notifAudioRef.current = audio;

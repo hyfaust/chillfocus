@@ -12,10 +12,10 @@ interface PresetSound {
 }
 
 const PRESETS: PresetSound[] = [
-  { id: 'rain', label: '雨声', icon: '🌧️', src: '/sounds/rain.ogg' },
-  { id: 'fireplace', label: '壁炉', icon: '🔥', src: '/sounds/fireplace.ogg' },
-  { id: 'forest', label: '森林', icon: '🌲', src: '/sounds/forest.ogg' },
-  { id: 'wind', label: '风声', icon: '💨', src: '/sounds/wind.ogg' },
+  { id: 'rain', label: '雨声', icon: '🌧️', src: `${import.meta.env.BASE_URL}sounds/rain.ogg` },
+  { id: 'fireplace', label: '壁炉', icon: '🔥', src: `${import.meta.env.BASE_URL}sounds/fireplace.ogg` },
+  { id: 'forest', label: '森林', icon: '🌲', src: `${import.meta.env.BASE_URL}sounds/forest.ogg` },
+  { id: 'wind', label: '风声', icon: '💨', src: `${import.meta.env.BASE_URL}sounds/wind.ogg` },
 ];
 
 interface ActiveSound {
