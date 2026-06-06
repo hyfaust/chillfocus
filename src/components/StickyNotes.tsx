@@ -8,11 +8,17 @@ interface StickyNote {
   text: string;
   x: number;
   y: number;
+  w: number;
+  h: number;
   color: string;
   createdAt: number;
 }
 
 const NOTE_COLORS = ['#ffd43b', '#ff8787', '#74c0fc', '#69db7c', '#da77f2', '#ffa94d'];
+const DEFAULT_W = 160;
+const DEFAULT_H = 100;
+const MIN_W = 80;
+const MIN_H = 60;
 
 export default function StickyNotes() {
   const [notes, setNotes] = useLocalStorage<StickyNote[]>('chillfocus-notes', []);
@@ -26,8 +32,9 @@ export default function StickyNotes() {
     const note: StickyNote = {
       id: generateId(),
       text: '',
-      x,
-      y,
+      x, y,
+      w: DEFAULT_W,
+      h: DEFAULT_H,
       color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
       createdAt: Date.now(),
     };
@@ -46,6 +53,10 @@ export default function StickyNotes() {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, x, y } : n));
   }, [setNotes]);
 
+  const updateNoteSize = useCallback((id: string, w: number, h: number) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, w, h } : n));
+  }, [setNotes]);
+
   const deleteNote = useCallback((id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id));
   }, [setNotes]);
@@ -58,7 +69,6 @@ export default function StickyNotes() {
     }));
   }, [setNotes]);
 
-  // Drag icon to create note
   const handleIconDragStart = useCallback((e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', 'create-note');
     e.dataTransfer.effectAllowed = 'copy';
@@ -85,14 +95,10 @@ export default function StickyNotes() {
     };
   }, [handleGlobalDrop, handleGlobalDragOver]);
 
-  // Toggle visibility on click
   const handleIconClick = useCallback(() => {
-    if (notes.length > 0) {
-      setVisible(v => !v);
-    }
+    if (notes.length > 0) setVisible(v => !v);
   }, [notes.length]);
 
-  // Individual note drag
   const handleNoteMouseDown = useCallback((noteId: string, e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
     e.preventDefault();
@@ -115,9 +121,32 @@ export default function StickyNotes() {
     document.addEventListener('mouseup', onMouseUp);
   }, [notes, updateNotePosition]);
 
+  const handleResizeMouseDown = useCallback((noteId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origW = note.w;
+    const origH = note.h;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const newW = Math.max(MIN_W, origW + (ev.clientX - startX));
+      const newH = Math.max(MIN_H, origH + (ev.clientY - startY));
+      updateNoteSize(noteId, newW, newH);
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [notes, updateNoteSize]);
+
   return (
     <>
-      {/* Notes layer - pointer-events: none so it doesn't block other UI */}
       <div className={`${styles.notesLayer} ${visible ? '' : styles.notesHidden}`}>
         {notes.map(note => (
           <div
@@ -126,6 +155,8 @@ export default function StickyNotes() {
             style={{
               left: note.x,
               top: note.y,
+              width: note.w || DEFAULT_W,
+              height: note.h || DEFAULT_H,
               backgroundColor: note.color + 'e6',
             }}
             onMouseDown={(e) => handleNoteMouseDown(note.id, e)}
@@ -162,11 +193,15 @@ export default function StickyNotes() {
                 {note.text || '点击编辑...'}
               </div>
             )}
+
+            <div
+              className={styles.resizeHandle}
+              onMouseDown={(e) => handleResizeMouseDown(note.id, e)}
+            />
           </div>
         ))}
       </div>
 
-      {/* Icon - bottom right */}
       <div
         ref={iconRef}
         className={styles.icon}

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Track, Playlist, PlayMode } from '../types';
+import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { generateId } from '../utils/timeUtils';
 
 interface AudioPlayerState {
@@ -13,6 +13,7 @@ interface AudioPlayerState {
   playMode: PlayMode;
   shuffleOrder: number[];
   shuffleIndex: number;
+  playTimer: PlayTimer;
 }
 
 export function useAudioPlayer() {
@@ -27,12 +28,16 @@ export function useAudioPlayer() {
     playMode: 'sequential',
     shuffleOrder: [],
     shuffleIndex: 0,
+    playTimer: { duration: 0, remaining: 0, waitForTrackEnd: false, active: false },
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
@@ -45,13 +50,9 @@ export function useAudioPlayer() {
   const getAnalyser = useCallback((): AnalyserNode | null => {
     if (analyserRef.current) return analyserRef.current;
     const audio = getAudio();
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-    }
+    if (!audioContextRef.current) audioContextRef.current = new AudioContext();
     const ctx = audioContextRef.current;
-    if (!sourceRef.current) {
-      sourceRef.current = ctx.createMediaElementSource(audio);
-    }
+    if (!sourceRef.current) sourceRef.current = ctx.createMediaElementSource(audio);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
@@ -60,10 +61,6 @@ export function useAudioPlayer() {
     analyserRef.current = analyser;
     return analyser;
   }, [getAudio]);
-
-  const getActivePlaylist = useCallback((): Playlist | undefined => {
-    return state.playlists.find(p => p.id === state.activePlaylistId);
-  }, [state.playlists, state.activePlaylistId]);
 
   const generateShuffleOrder = useCallback((length: number): number[] => {
     const order = Array.from({ length }, (_, i) => i);
@@ -82,14 +79,12 @@ export function useAudioPlayer() {
   }, [getAudio]);
 
   const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single') {
+    if (mode === 'loop-single' || mode === 'single') {
       return { index: currentIndex, newShuffleIdx: shuffleIdx };
     }
     if (mode === 'shuffle') {
       let nextShuffleIdx = shuffleIdx + 1;
-      if (nextShuffleIdx >= shuffleOrd.length) {
-        nextShuffleIdx = 0;
-      }
+      if (nextShuffleIdx >= shuffleOrd.length) nextShuffleIdx = 0;
       return { index: shuffleOrd[nextShuffleIdx], newShuffleIdx: nextShuffleIdx };
     }
     const next = currentIndex + 1;
@@ -101,7 +96,7 @@ export function useAudioPlayer() {
   }, []);
 
   const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single') {
+    if (mode === 'loop-single' || mode === 'single') {
       return { index: currentIndex, newShuffleIdx: shuffleIdx };
     }
     if (mode === 'shuffle') {
@@ -117,6 +112,7 @@ export function useAudioPlayer() {
     return { index: prev, newShuffleIdx: 0 };
   }, []);
 
+  // Audio event listeners
   useEffect(() => {
     const audio = getAudio();
     const onTimeUpdate = () => {
@@ -126,20 +122,41 @@ export function useAudioPlayer() {
       setState(prev => ({ ...prev, duration: audio.duration }));
     };
     const onEnded = () => {
-      setState(prev => {
-        const playlist = prev.playlists.find(p => p.id === prev.activePlaylistId);
-        if (!playlist || !prev.currentTrack) return { ...prev, isPlaying: false };
-        const idx = playlist.tracks.findIndex(t => t.id === prev.currentTrack!.id);
-        const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, prev.playMode, prev.shuffleIndex, prev.shuffleOrder);
-        if (nextIdx < 0 || nextIdx >= playlist.tracks.length) return { ...prev, isPlaying: false };
-        return { ...prev, currentTrack: playlist.tracks[nextIdx], isPlaying: true, currentTime: 0, shuffleIndex: newShuffleIdx };
-      });
+      const s = stateRef.current;
+      const playlist = s.playlists.find(p => p.id === s.activePlaylistId);
+      if (!playlist || !s.currentTrack) {
+        setState(prev => ({ ...prev, isPlaying: false }));
+        return;
+      }
+
+      // single mode: stop after track ends
+      if (s.playMode === 'single') {
+        setState(prev => ({ ...prev, isPlaying: false }));
+        return;
+      }
+
+      const idx = playlist.tracks.findIndex(t => t.id === s.currentTrack!.id);
+      const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.playMode, s.shuffleIndex, s.shuffleOrder);
+      if (nextIdx < 0 || nextIdx >= playlist.tracks.length) {
+        setState(prev => ({ ...prev, isPlaying: false }));
+        return;
+      }
+
+      const nextTrack = playlist.tracks[nextIdx];
+      audio.src = nextTrack.url;
+      audio.play().catch(() => {});
+      setState(prev => ({
+        ...prev,
+        currentTrack: nextTrack,
+        isPlaying: true,
+        currentTime: 0,
+        shuffleIndex: newShuffleIdx,
+      }));
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
-
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
@@ -152,11 +169,45 @@ export function useAudioPlayer() {
     audio.volume = state.volume;
   }, [state.volume, getAudio]);
 
+  // Play timer countdown
   useEffect(() => {
-    if (!state.currentTrack) return;
+    if (!state.playTimer.active || !state.isPlaying) {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      return;
+    }
+    timerIntervalRef.current = setInterval(() => {
+      setState(prev => {
+        const remaining = prev.playTimer.remaining - 1;
+        if (remaining <= 0) {
+          if (prev.playTimer.waitForTrackEnd) {
+            return { ...prev, playTimer: { ...prev.playTimer, remaining: 0, active: false } };
+          }
+          const audio = getAudio();
+          audio.pause();
+          return { ...prev, isPlaying: false, playTimer: { ...prev.playTimer, remaining: 0, active: false } };
+        }
+        return { ...prev, playTimer: { ...prev.playTimer, remaining } };
+      });
+    }, 1000);
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+  }, [state.playTimer.active, state.isPlaying, getAudio]);
+
+  // Check waitForTrackEnd on track end
+  useEffect(() => {
     const audio = getAudio();
-    audio.loop = state.playMode === 'loop-single';
-  }, [state.playMode, state.currentTrack, getAudio]);
+    const checkTimer = () => {
+      const s = stateRef.current;
+      if (s.playTimer.active && s.playTimer.remaining <= 0 && s.playTimer.waitForTrackEnd) {
+        audio.pause();
+        setState(prev => ({ ...prev, isPlaying: false, playTimer: { ...prev.playTimer, active: false } }));
+      }
+    };
+    audio.addEventListener('ended', checkTimer);
+    return () => audio.removeEventListener('ended', checkTimer);
+  }, [getAudio]);
 
   const createPlaylist = useCallback((name: string) => {
     const playlist: Playlist = { id: generateId(), name, tracks: [] };
@@ -193,9 +244,9 @@ export function useAudioPlayer() {
       id: generateId(),
       name: file.name.replace(/\.[^/.]+$/, ''),
       url: URL.createObjectURL(file),
+      filePath: (file as any).path || '',
       duration: 0,
     }));
-
     newTracks.forEach(track => {
       const audio = new Audio(track.url);
       audio.addEventListener('loadedmetadata', () => {
@@ -210,11 +261,37 @@ export function useAudioPlayer() {
         }));
       });
     });
-
     setState(prev => ({
       ...prev,
       playlists: prev.playlists.map(p =>
         p.id === playlistId ? { ...p, tracks: [...p.tracks, ...newTracks] } : p
+      ),
+    }));
+  }, []);
+
+  const addUrlTrackToPlaylist = useCallback((playlistId: string, url: string, name?: string) => {
+    const track: Track = {
+      id: generateId(),
+      name: name || url.split('/').pop()?.replace(/\.[^/.]+$/, '') || '网络音乐',
+      url,
+      duration: 0,
+    };
+    const audio = new Audio(url);
+    audio.addEventListener('loadedmetadata', () => {
+      track.duration = audio.duration;
+      setState(prev => ({
+        ...prev,
+        playlists: prev.playlists.map(p =>
+          p.id === playlistId
+            ? { ...p, tracks: p.tracks.map(t => t.id === track.id ? { ...t, duration: audio.duration } : t) }
+            : p
+        ),
+      }));
+    });
+    setState(prev => ({
+      ...prev,
+      playlists: prev.playlists.map(p =>
+        p.id === playlistId ? { ...p, tracks: [...p.tracks, track] } : p
       ),
     }));
   }, []);
@@ -235,12 +312,10 @@ export function useAudioPlayer() {
       audio.play().catch(() => {});
       setState(prev => ({ ...prev, isPlaying: true }));
     } else {
-      const playlist = getActivePlaylist();
-      if (playlist && playlist.tracks.length > 0) {
-        playTrack(playlist.tracks[0]);
-      }
+      const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
+      if (playlist && playlist.tracks.length > 0) playTrack(playlist.tracks[0]);
     }
-  }, [getAudio, state.currentTrack, getActivePlaylist, playTrack]);
+  }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playTrack]);
 
   const pause = useCallback(() => {
     const audio = getAudio();
@@ -254,7 +329,7 @@ export function useAudioPlayer() {
   }, [state.isPlaying, play, pause]);
 
   const next = useCallback(() => {
-    const playlist = getActivePlaylist();
+    const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
     if (!playlist || !state.currentTrack) return;
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
     const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
@@ -262,10 +337,10 @@ export function useAudioPlayer() {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[nextIdx]);
     }
-  }, [getActivePlaylist, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack]);
 
   const prev = useCallback(() => {
-    const playlist = getActivePlaylist();
+    const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
     if (!playlist || !state.currentTrack) return;
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
     const { index: prevIdx, newShuffleIdx } = getPrevTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
@@ -273,7 +348,7 @@ export function useAudioPlayer() {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[prevIdx]);
     }
-  }, [getActivePlaylist, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack]);
 
   const seek = useCallback((time: number) => {
     const audio = getAudio();
@@ -295,9 +370,7 @@ export function useAudioPlayer() {
         if (prev.currentTrack) {
           const currentIdx = playlist.tracks.findIndex(t => t.id === prev.currentTrack!.id);
           const pos = shuffleOrder.indexOf(currentIdx);
-          if (pos > 0) {
-            [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
-          }
+          if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
           shuffleIndex = 0;
         }
       }
@@ -314,9 +387,7 @@ export function useAudioPlayer() {
         shuffleOrder = generateShuffleOrder(playlist.tracks.length);
         const currentIdx = playlist.tracks.findIndex(t => t.id === track.id);
         const pos = shuffleOrder.indexOf(currentIdx);
-        if (pos > 0) {
-          [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
-        }
+        if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
         shuffleIndex = 0;
       }
       return { ...prev, activePlaylistId: playlistId, shuffleOrder, shuffleIndex };
@@ -328,9 +399,9 @@ export function useAudioPlayer() {
     const playlist = state.playlists.find(p => p.id === playlistId);
     if (!playlist) return;
     const exportData = {
-      version: 1,
+      version: 2,
       type: 'chillfocus-playlist',
-      playlist: { ...playlist, tracks: playlist.tracks.map(t => ({ ...t, url: '' })) },
+      playlist,
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -340,19 +411,18 @@ export function useAudioPlayer() {
     URL.revokeObjectURL(a.href);
   }, [state.playlists]);
 
-  const exportAllPlaylists = useCallback(() => {
+  const exportPlaylists = useCallback((playlistIds: string[]) => {
+    const toExport = state.playlists.filter(p => playlistIds.includes(p.id));
+    if (toExport.length === 0) return;
     const exportData = {
-      version: 1,
-      type: 'chillfocus-playlists',
-      playlists: state.playlists.map(p => ({
-        ...p,
-        tracks: p.tracks.map(t => ({ ...t, url: '' })),
-      })),
+      version: 2,
+      type: toExport.length === 1 ? 'chillfocus-playlist' : 'chillfocus-playlists',
+      ...(toExport.length === 1 ? { playlist: toExport[0] } : { playlists: toExport }),
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'chillfocus-playlists.json';
+    a.download = toExport.length === 1 ? `${toExport[0].name}.json` : 'chillfocus-playlists.json';
     a.click();
     URL.revokeObjectURL(a.href);
   }, [state.playlists]);
@@ -362,34 +432,47 @@ export function useAudioPlayer() {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        if (data.type === 'chillfocus-playlist' && data.playlist) {
-          const playlist: Playlist = {
-            ...data.playlist,
+        const importOne = (p: Playlist) => ({
+          ...p,
+          id: generateId(),
+          tracks: p.tracks.map((t: Track) => ({
+            ...t,
             id: generateId(),
-            tracks: data.playlist.tracks.map((t: Track) => ({ ...t, id: generateId(), url: '' })),
-          };
+            url: t.filePath ? `file:///${t.filePath.replace(/\\/g, '/')}` : (t.url || ''),
+          })),
+        });
+        if (data.type === 'chillfocus-playlist' && data.playlist) {
+          const playlist = importOne(data.playlist);
           setState(prev => ({
             ...prev,
             playlists: [...prev.playlists, playlist],
             activePlaylistId: prev.activePlaylistId ?? playlist.id,
           }));
         } else if (data.type === 'chillfocus-playlists' && data.playlists) {
-          const newPlaylists: Playlist[] = data.playlists.map((p: Playlist) => ({
-            ...p,
-            id: generateId(),
-            tracks: p.tracks.map((t: Track) => ({ ...t, id: generateId(), url: '' })),
-          }));
+          const newPlaylists = data.playlists.map(importOne);
           setState(prev => ({
             ...prev,
             playlists: [...prev.playlists, ...newPlaylists],
             activePlaylistId: prev.activePlaylistId ?? newPlaylists[0]?.id ?? null,
           }));
         }
-      } catch {
-        // invalid file
-      }
+      } catch { /* invalid */ }
     };
     reader.readAsText(file);
+  }, []);
+
+  const startPlayTimer = useCallback((minutes: number, waitForTrackEnd: boolean) => {
+    setState(prev => ({
+      ...prev,
+      playTimer: { duration: minutes * 60, remaining: minutes * 60, waitForTrackEnd, active: true },
+    }));
+  }, []);
+
+  const cancelPlayTimer = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      playTimer: { ...prev.playTimer, active: false, remaining: 0 },
+    }));
   }, []);
 
   return {
@@ -401,6 +484,7 @@ export function useAudioPlayer() {
     renamePlaylist,
     setActivePlaylist,
     addTracksToPlaylist,
+    addUrlTrackToPlaylist,
     removeTrackFromPlaylist,
     play,
     pause,
@@ -413,7 +497,9 @@ export function useAudioPlayer() {
     playSpecificTrack,
     playTrack,
     exportPlaylist,
-    exportAllPlaylists,
+    exportPlaylists,
     importPlaylists,
+    startPlayTimer,
+    cancelPlayTimer,
   };
 }

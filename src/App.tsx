@@ -57,6 +57,7 @@ function App() {
               duration={player.duration}
               volume={player.volume}
               playMode={player.playMode}
+              playTimer={player.playTimer}
               onTogglePlay={() => { ensureAnalyser(); player.togglePlay(); }}
               onNext={player.next}
               onPrev={player.prev}
@@ -68,11 +69,13 @@ function App() {
               onRenamePlaylist={player.renamePlaylist}
               onSetActivePlaylist={player.setActivePlaylist}
               onAddTracks={player.addTracksToPlaylist}
+              onAddUrlTrack={player.addUrlTrackToPlaylist}
               onRemoveTrack={player.removeTrackFromPlaylist}
               onPlayTrack={(plId, track) => { ensureAnalyser(); player.playSpecificTrack(plId, track); }}
-              onExportPlaylist={player.exportPlaylist}
-              onExportAllPlaylists={player.exportAllPlaylists}
+              onExportPlaylists={player.exportPlaylists}
               onImportPlaylists={player.importPlaylists}
+              onStartPlayTimer={player.startPlayTimer}
+              onCancelPlayTimer={player.cancelPlayTimer}
             />
 
             <div className="ambient-divider" />
