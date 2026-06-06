@@ -1,6 +1,3 @@
-import type { Track } from '../types';
-import { generateId } from './timeUtils';
-
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
@@ -22,7 +19,7 @@ export async function isTauri(): Promise<boolean> {
 export interface LocalFileResult {
   name: string;
   path: string;
-  blobUrl: string;
+  file: File;
 }
 
 export async function selectAudioFiles(): Promise<LocalFileResult[]> {
@@ -44,10 +41,9 @@ export async function selectAudioFiles(): Promise<LocalFileResult[]> {
 
   for (const path of paths) {
     const data = await mods.fs.readFile(path);
-    const blob = new Blob([data]);
-    const blobUrl = URL.createObjectURL(blob);
-    const name = path.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Unknown';
-    results.push({ name, path, blobUrl });
+    const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+    const file = new File([data], fileName);
+    results.push({ name: fileName, path, file });
   }
 
   return results;
@@ -69,10 +65,8 @@ export async function selectAudioDirectory(): Promise<LocalFileResult[]> {
       const fullPath = `${dir}\\${entry.name}`;
       try {
         const data = await mods.fs.readFile(fullPath);
-        const blob = new Blob([data]);
-        const blobUrl = URL.createObjectURL(blob);
-        const name = entry.name.replace(/\.[^/.]+$/, '');
-        results.push({ name, path: fullPath, blobUrl });
+        const file = new File([data], entry.name);
+        results.push({ name: entry.name, path: fullPath, file });
       } catch { /* skip unreadable files */ }
     }
   }
@@ -84,21 +78,19 @@ export async function readFileAsBlobUrl(path: string): Promise<string | null> {
   const mods = await getTauriModules();
   if (!mods) return null;
   try {
+    console.log('[Tauri] Reading file from disk:', path);
     const data = await mods.fs.readFile(path);
+    console.log('[Tauri] Read', data.byteLength, 'bytes');
     const blob = new Blob([data]);
-    return URL.createObjectURL(blob);
-  } catch {
+    const url = URL.createObjectURL(blob);
+    console.log('[Tauri] Created blob URL:', url.substring(0, 50));
+    return url;
+  } catch (err) {
+    console.error('[Tauri] Failed to read file:', path, err);
     return null;
   }
 }
 
-export function filesToTracks(files: LocalFileResult[]): Track[] {
-  return files.map(f => ({
-    id: generateId(),
-    name: f.name,
-    url: f.blobUrl,
-    filePath: f.path,
-    sourceFileName: f.path.split(/[/\\]/).pop() || f.name,
-    duration: 0,
-  }));
+export function filesToFileArray(results: LocalFileResult[]): File[] {
+  return results.map(r => r.file);
 }

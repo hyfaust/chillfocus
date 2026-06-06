@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles } from '../utils/audioFormats';
-import { isTauri, selectAudioFiles, filesToTracks } from '../utils/tauriFileAccess';
+import { isTauri, selectAudioFiles, selectAudioDirectory, filesToFileArray } from '../utils/tauriFileAccess';
 import styles from './MusicPlayer.module.css';
 
 interface Props {
@@ -26,7 +26,6 @@ interface Props {
   onRenamePlaylist: (id: string, name: string) => void;
   onSetActivePlaylist: (id: string) => void;
   onAddTracks: (playlistId: string, files: File[]) => void;
-  onAddLocalTracks: (playlistId: string, tracks: Track[]) => void;
   onAddUrlTrack: (playlistId: string, url: string, name?: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
   onPlayTrack: (playlistId: string, track: Track) => void;
@@ -59,7 +58,7 @@ export default function MusicPlayer({
   playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, playMode, playTimer,
   onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetPlayMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
-  onAddTracks, onAddLocalTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
+  onAddTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
   onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,13 +83,11 @@ export default function MusicPlayer({
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
 
   const handleFileSelect = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
-    // Tauri: use native file dialog
+    // Tauri: use native file dialog, convert to File[] for unified IndexedDB storage
     if (await isTauri()) {
       if (!activePlaylistId) return;
-      const files = await selectAudioFiles();
-      if (files.length) {
-        onAddLocalTracks(activePlaylistId, filesToTracks(files));
-      }
+      const results = await selectAudioFiles();
+      if (results.length) onAddTracks(activePlaylistId, filesToFileArray(results));
       return;
     }
     // Web: use input element
@@ -99,7 +96,7 @@ export default function MusicPlayer({
       if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }, [activePlaylistId, onAddTracks, onAddLocalTracks]);
+  }, [activePlaylistId, onAddTracks]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -135,11 +132,27 @@ export default function MusicPlayer({
     if (importFileRef.current) importFileRef.current.value = '';
   }, [onImportPlaylists]);
 
-  const handleReassociateFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const audioFiles = filterAudioFiles(Array.from(e.target.files || []));
-    if (audioFiles.length && activePlaylistId) onReassociateFiles(activePlaylistId, audioFiles);
-    if (reassociateInputRef.current) reassociateInputRef.current.value = '';
-  }, [activePlaylistId, onReassociateFiles]);
+  const handleReassociateFile = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
+    // Tauri: use native folder dialog, replace tracks (saved to IndexedDB)
+    if (await isTauri()) {
+      if (!activePlaylistId) return;
+      const results = await selectAudioDirectory();
+      if (results.length) {
+        const oldPlaylist = playlists.find(p => p.id === activePlaylistId);
+        if (oldPlaylist) {
+          oldPlaylist.tracks.forEach(t => onRemoveTrack(activePlaylistId, t.id));
+        }
+        onAddTracks(activePlaylistId, filesToFileArray(results));
+      }
+      return;
+    }
+    // Web: use input element
+    if (e) {
+      const audioFiles = filterAudioFiles(Array.from(e.target.files || []));
+      if (audioFiles.length && activePlaylistId) onReassociateFiles(activePlaylistId, audioFiles);
+      if (reassociateInputRef.current) reassociateInputRef.current.value = '';
+    }
+  }, [activePlaylistId, onReassociateFiles, onAddTracks, onRemoveTrack, playlists]);
 
   const hasUnresolvedTracks = activePlaylist?.tracks.some(t => !t.url && !t.fileKey) ?? false;
 

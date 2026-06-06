@@ -7,8 +7,6 @@ interface Props {
   onCancel: () => void;
 }
 
-const ASPECT = 3.75; // Match Pomodoro container ratio (1200×320)
-
 export default function ImageCropper({ src, onCrop, onCancel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -29,7 +27,8 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
       const w = img.width * ratio;
       const h = img.height * ratio;
       setImgSize({ w, h });
-
+      const ASPECT = 3.75; // Match Pomodoro container ratio
+      // Fit crop box within image with this aspect ratio
       let cropW = w * 0.85;
       let cropH = cropW / ASPECT;
       if (cropH > h * 0.85) {
@@ -123,6 +122,7 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
     e.stopPropagation();
     const startX = e.clientX;
     const startCrop = { ...crop };
+    const ASPECT = 3.75;
 
     const onMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
@@ -130,21 +130,26 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
         let x = startCrop.x;
         let y = startCrop.y;
         let newW = startCrop.w;
+        let newH = startCrop.h;
         const minW = 60;
 
+        // Determine new width based on corner
         if (corner === 'se' || corner === 'ne') {
           newW = Math.max(minW, startCrop.w + dx);
         } else {
           newW = Math.max(minW, startCrop.w - dx);
         }
 
-        let newH = newW / ASPECT;
+        // Derive height from width to lock aspect ratio
+        newH = newW / ASPECT;
 
+        // Enforce image bounds
         newW = Math.min(newW, imgSize.w - x);
         newH = Math.min(newH, imgSize.h - y);
         if (newH < newW / ASPECT) newW = newH * ASPECT;
         newH = newW / ASPECT;
 
+        // Adjust position for left-side corners
         if (corner === 'nw' || corner === 'sw') {
           x = startCrop.x + startCrop.w - newW;
         }

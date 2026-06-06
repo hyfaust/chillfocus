@@ -147,6 +147,7 @@ export function useAudioPlayer() {
     }
     // Tauri: try reading from disk using filePath
     if (track.filePath) {
+      console.log('[resolveTrackUrl] Trying filePath:', track.filePath);
       const url = await readFileAsBlobUrl(track.filePath);
       if (url) {
         setState(prev => ({
@@ -159,6 +160,9 @@ export function useAudioPlayer() {
         }));
         return url;
       }
+      console.warn('[resolveTrackUrl] filePath read failed for:', track.filePath);
+    } else {
+      console.warn('[resolveTrackUrl] No filePath, no fileKey, no valid URL for track:', track.name);
     }
     return track.url || '';
   }, []);
@@ -466,7 +470,7 @@ export function useAudioPlayer() {
   const sanitizeTrack = (t: Track): Track => ({
     id: t.id, name: t.name, url: '',
     fileKey: t.fileKey || '',
-    filePath: '',
+    filePath: t.filePath || '',
     sourceFileName: t.sourceFileName || t.name, duration: t.duration,
   });
 

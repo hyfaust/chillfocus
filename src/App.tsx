@@ -62,7 +62,6 @@ function App() {
               onRenamePlaylist={player.renamePlaylist}
               onSetActivePlaylist={player.setActivePlaylist}
               onAddTracks={player.addTracksToPlaylist}
-              onAddLocalTracks={player.addLocalTracksToPlaylist}
               onAddUrlTrack={player.addUrlTrackToPlaylist}
               onRemoveTrack={player.removeTrackFromPlaylist}
               onPlayTrack={(plId, track) => { ensureAnalyser(); player.playSpecificTrack(plId, track); }}
