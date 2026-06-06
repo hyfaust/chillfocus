@@ -60,6 +60,7 @@ export default function MusicPlayer({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const trackListRef = useRef<HTMLDivElement>(null);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
@@ -288,7 +289,7 @@ export default function MusicPlayer({
       </div>
 
       {/* 曲目列表 */}
-      <div className={styles.trackListWrap} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+      <div className={styles.trackListWrap} ref={trackListRef} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
         <div className={styles.trackListHeader}>
           <span>{activePlaylist ? `${activePlaylist.tracks.length} 首曲目` : '选择播放列表'}</span>
           <div className={styles.addMusicWrap}>
@@ -329,6 +330,11 @@ export default function MusicPlayer({
         </ul>
         {(!activePlaylist || activePlaylist.tracks.length === 0) && (
           <div className={styles.empty}>拖拽音频文件到此处，或点击「添加音乐」</div>
+        )}
+        {activePlaylist && activePlaylist.tracks.length > 5 && (
+          <button className={styles.backToTopBtn} onClick={() => trackListRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} title="回到顶部">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+          </button>
         )}
       </div>
     </div>

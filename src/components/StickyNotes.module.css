@@ -7,6 +7,14 @@
   transition: opacity 0.3s ease;
 }
 
+.pinnedLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
 .notesHidden {
   opacity: 0;
   pointer-events: none !important;
@@ -34,6 +42,10 @@
   pointer-events: auto;
   overflow: hidden;
   resize: none;
+}
+
+.notePinned {
+  position: absolute;
 }
 
 .resizeHandle {
@@ -90,6 +102,25 @@
 
 .noteColorBtn:hover {
   transform: scale(1.2);
+}
+
+.notePinBtn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.notePinBtn:hover {
+  opacity: 1;
+}
+
+.notePinBtnActive {
+  opacity: 1;
 }
 
 .noteDeleteBtn {

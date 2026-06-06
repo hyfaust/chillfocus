@@ -337,6 +337,7 @@
 }
 
 .trackListWrap {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   border-radius: 10px;
@@ -452,6 +453,32 @@
   color: var(--text-secondary);
   font-size: 12px;
   padding: 20px 0;
+}
+
+.backToTopBtn {
+  position: sticky;
+  bottom: 8px;
+  left: 100%;
+  transform: translateX(-100%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(15, 15, 26, 0.85);
+  backdrop-filter: blur(6px);
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.backToTopBtn:hover {
+  border-color: var(--accent);
+  background: rgba(124, 93, 250, 0.15);
 }
 
 /* Dropdown menus */

@@ -406,42 +406,45 @@ export function useAudioPlayer() {
   }, [playTrack, generateShuffleOrder]);
 
   const sanitizeTrack = (t: Track): Track => ({
-    ...t,
-    url: t.url.startsWith('blob:') ? '' : t.url,
+    id: t.id,
+    name: t.name,
+    url: '',
     filePath: '',
+    sourceFileName: t.sourceFileName || t.name,
+    duration: t.duration,
   });
+
+  const triggerDownload = (data: object, filename: string) => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const exportPlaylist = useCallback((playlistId: string) => {
     const playlist = state.playlists.find(p => p.id === playlistId);
     if (!playlist) return;
-    const exportData = {
-      version: 2,
-      type: 'chillfocus-playlist',
-      playlist: { ...playlist, tracks: playlist.tracks.map(sanitizeTrack) },
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${playlist.name}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    triggerDownload(
+      { version: 2, type: 'chillfocus-playlist', playlist: { ...playlist, tracks: playlist.tracks.map(sanitizeTrack) } },
+      `${playlist.name}.json`
+    );
   }, [state.playlists]);
 
   const exportPlaylists = useCallback((playlistIds: string[]) => {
     const toExport = state.playlists.filter(p => playlistIds.includes(p.id));
     if (toExport.length === 0) return;
     const sanitize = (p: Playlist) => ({ ...p, tracks: p.tracks.map(sanitizeTrack) });
-    const exportData = {
-      version: 2,
-      type: toExport.length === 1 ? 'chillfocus-playlist' : 'chillfocus-playlists',
-      ...(toExport.length === 1 ? { playlist: sanitize(toExport[0]) } : { playlists: toExport.map(sanitize) }),
-    };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = toExport.length === 1 ? `${toExport[0].name}.json` : 'chillfocus-playlists.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const exportData = toExport.length === 1
+      ? { version: 2, type: 'chillfocus-playlist', playlist: sanitize(toExport[0]) }
+      : { version: 2, type: 'chillfocus-playlists', playlists: toExport.map(sanitize) };
+    const filename = toExport.length === 1 ? `${toExport[0].name}.json` : 'chillfocus-playlists.json';
+    triggerDownload(exportData, filename);
   }, [state.playlists]);
 
   const importPlaylists = useCallback((file: File) => {

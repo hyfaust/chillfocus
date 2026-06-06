@@ -11,6 +11,7 @@ interface StickyNote {
   w: number;
   h: number;
   color: string;
+  pinned: boolean;
   createdAt: number;
 }
 
@@ -36,6 +37,7 @@ export default function StickyNotes() {
       w: DEFAULT_W,
       h: DEFAULT_H,
       color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
+      pinned: false,
       createdAt: Date.now(),
     };
     setNotes(prev => [...prev, note]);
@@ -66,6 +68,19 @@ export default function StickyNotes() {
       if (n.id !== id) return n;
       const idx = NOTE_COLORS.indexOf(n.color);
       return { ...n, color: NOTE_COLORS[(idx + 1) % NOTE_COLORS.length] };
+    }));
+  }, [setNotes]);
+
+  const togglePin = useCallback((id: string) => {
+    setNotes(prev => prev.map(n => {
+      if (n.id !== id) return n;
+      if (!n.pinned) {
+        // floating → pinned: convert viewport coords to page coords
+        return { ...n, pinned: true, x: n.x + window.scrollX, y: n.y + window.scrollY };
+      } else {
+        // pinned → floating: convert page coords to viewport coords
+        return { ...n, pinned: false, x: n.x - window.scrollX, y: n.y - window.scrollY };
+      }
     }));
   }, [setNotes]);
 
@@ -111,7 +126,11 @@ export default function StickyNotes() {
     const origY = note.y;
 
     const onMouseMove = (ev: MouseEvent) => {
-      updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
+      if (note.pinned) {
+        updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
+      } else {
+        updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
+      }
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -145,61 +164,79 @@ export default function StickyNotes() {
     document.addEventListener('mouseup', onMouseUp);
   }, [notes, updateNoteSize]);
 
+  const renderNote = (note: StickyNote) => (
+    <div
+      key={note.id}
+      className={`${styles.note} ${note.pinned ? styles.notePinned : ''}`}
+      style={{
+        left: note.x,
+        top: note.y,
+        width: note.w || DEFAULT_W,
+        height: note.h || DEFAULT_H,
+        backgroundColor: note.color + 'e6',
+      }}
+      onMouseDown={(e) => handleNoteMouseDown(note.id, e)}
+    >
+      <div className={styles.noteActions}>
+        <button
+          className={styles.noteColorBtn}
+          onClick={() => cycleColor(note.id)}
+          title="换色"
+          style={{ backgroundColor: note.color }}
+        />
+        <button
+          className={`${styles.notePinBtn} ${note.pinned ? styles.notePinBtnActive : ''}`}
+          onClick={() => togglePin(note.id)}
+          title={note.pinned ? '取消固定' : '固定'}
+        >
+          📌
+        </button>
+        <button
+          className={styles.noteDeleteBtn}
+          onClick={() => deleteNote(note.id)}
+          title="删除"
+        >×</button>
+      </div>
+
+      {editingId === note.id ? (
+        <textarea
+          className={styles.noteTextarea}
+          value={editText}
+          onChange={e => setEditText(e.target.value)}
+          onBlur={() => updateNoteText(note.id, editText)}
+          onKeyDown={e => { if (e.key === 'Escape') updateNoteText(note.id, editText); }}
+          autoFocus
+          placeholder="写点什么..."
+        />
+      ) : (
+        <div
+          className={styles.noteText}
+          onClick={() => { setEditingId(note.id); setEditText(note.text); }}
+        >
+          {note.text || '点击编辑...'}
+        </div>
+      )}
+
+      <div
+        className={styles.resizeHandle}
+        onMouseDown={(e) => handleResizeMouseDown(note.id, e)}
+      />
+    </div>
+  );
+
+  const floatingNotes = notes.filter(n => !n.pinned);
+  const pinnedNotes = notes.filter(n => n.pinned);
+
   return (
     <>
+      {/* Floating notes layer - fixed positioning */}
       <div className={`${styles.notesLayer} ${visible ? '' : styles.notesHidden}`}>
-        {notes.map(note => (
-          <div
-            key={note.id}
-            className={styles.note}
-            style={{
-              left: note.x,
-              top: note.y,
-              width: note.w || DEFAULT_W,
-              height: note.h || DEFAULT_H,
-              backgroundColor: note.color + 'e6',
-            }}
-            onMouseDown={(e) => handleNoteMouseDown(note.id, e)}
-          >
-            <div className={styles.noteActions}>
-              <button
-                className={styles.noteColorBtn}
-                onClick={() => cycleColor(note.id)}
-                title="换色"
-                style={{ backgroundColor: note.color }}
-              />
-              <button
-                className={styles.noteDeleteBtn}
-                onClick={() => deleteNote(note.id)}
-                title="删除"
-              >×</button>
-            </div>
+        {floatingNotes.map(renderNote)}
+      </div>
 
-            {editingId === note.id ? (
-              <textarea
-                className={styles.noteTextarea}
-                value={editText}
-                onChange={e => setEditText(e.target.value)}
-                onBlur={() => updateNoteText(note.id, editText)}
-                onKeyDown={e => { if (e.key === 'Escape') updateNoteText(note.id, editText); }}
-                autoFocus
-                placeholder="写点什么..."
-              />
-            ) : (
-              <div
-                className={styles.noteText}
-                onClick={() => { setEditingId(note.id); setEditText(note.text); }}
-              >
-                {note.text || '点击编辑...'}
-              </div>
-            )}
-
-            <div
-              className={styles.resizeHandle}
-              onMouseDown={(e) => handleResizeMouseDown(note.id, e)}
-            />
-          </div>
-        ))}
+      {/* Pinned notes layer - absolute positioning, scrolls with page */}
+      <div className={`${styles.pinnedLayer} ${visible ? '' : styles.notesHidden}`}>
+        {pinnedNotes.map(renderNote)}
       </div>
 
       <div

@@ -36,7 +36,9 @@ export function usePomodoro() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const notifAudioRef = useRef<HTMLAudioElement | null>(null);
   const settingsRef = useRef(settings);
+  const isRunningRef = useRef(state.isRunning);
   settingsRef.current = settings;
+  isRunningRef.current = state.isRunning;
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
@@ -81,9 +83,11 @@ export function usePomodoro() {
   }, []);
 
   useEffect(() => {
-    if (!state.isRunning) return;
+    if (intervalRef.current) return;
 
     intervalRef.current = setInterval(() => {
+      if (!isRunningRef.current) return;
+
       setState(prev => {
         if (prev.timeLeft <= 1) {
           playNotification();
@@ -102,8 +106,13 @@ export function usePomodoro() {
       });
     }, 1000);
 
-    return clearTimer;
-  }, [state.isRunning, clearTimer, nextPhase, getDuration, playNotification]);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [playNotification, nextPhase, getDuration]);
 
   const start = useCallback(() => {
     setState(prev => ({ ...prev, isRunning: true }));
