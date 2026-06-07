@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles } from '../utils/audioFormats';
-import { isTauri, selectAudioFiles, selectAudioDirectory, filesToFileArray } from '../utils/tauriFileAccess';
+import { isTauri, selectAudioFiles, selectAudioDirectory, filesToFileArray, filesToFilePaths } from '../utils/tauriFileAccess';
 import styles from './MusicPlayer.module.css';
 
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
   onDeletePlaylist: (id: string) => void;
   onRenamePlaylist: (id: string, name: string) => void;
   onSetActivePlaylist: (id: string) => void;
-  onAddTracks: (playlistId: string, files: File[]) => void;
+  onAddTracks: (playlistId: string, files: File[], paths?: string[]) => void;
   onAddUrlTrack: (playlistId: string, url: string, name?: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
   onPlayTrack: (playlistId: string, track: Track) => void;
@@ -83,11 +83,11 @@ export default function MusicPlayer({
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
 
   const handleFileSelect = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
-    // Tauri: use native file dialog, convert to File[] for unified IndexedDB storage
+    // Tauri: use native file dialog, pass both files and paths
     if (await isTauri()) {
       if (!activePlaylistId) return;
       const results = await selectAudioFiles();
-      if (results.length) onAddTracks(activePlaylistId, filesToFileArray(results));
+      if (results.length) onAddTracks(activePlaylistId, filesToFileArray(results), filesToFilePaths(results));
       return;
     }
     // Web: use input element
@@ -133,7 +133,7 @@ export default function MusicPlayer({
   }, [onImportPlaylists]);
 
   const handleReassociateFile = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
-    // Tauri: use native folder dialog, replace tracks (saved to IndexedDB)
+    // Tauri: use native folder dialog, replace tracks (saved to IndexedDB + filePath)
     if (await isTauri()) {
       if (!activePlaylistId) return;
       const results = await selectAudioDirectory();
@@ -142,7 +142,7 @@ export default function MusicPlayer({
         if (oldPlaylist) {
           oldPlaylist.tracks.forEach(t => onRemoveTrack(activePlaylistId, t.id));
         }
-        onAddTracks(activePlaylistId, filesToFileArray(results));
+        onAddTracks(activePlaylistId, filesToFileArray(results), filesToFilePaths(results));
       }
       return;
     }

@@ -94,3 +94,7 @@ export async function readFileAsBlobUrl(path: string): Promise<string | null> {
 export function filesToFileArray(results: LocalFileResult[]): File[] {
   return results.map(r => r.file);
 }
+
+export function filesToFilePaths(results: LocalFileResult[]): string[] {
+  return results.map(r => r.path);
+}

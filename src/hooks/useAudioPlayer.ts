@@ -288,8 +288,8 @@ export function useAudioPlayer() {
     setState(prev => ({ ...prev, activePlaylistId: id }));
   }, []);
 
-  const addTracksToPlaylist = useCallback((playlistId: string, files: File[]) => {
-    const newTracks: Track[] = files.map(file => {
+  const addTracksToPlaylist = useCallback((playlistId: string, files: File[], paths?: string[]) => {
+    const newTracks: Track[] = files.map((file, i) => {
       const fileKey = `audio_${generateId()}`;
       saveAudioFile(fileKey, file);
       return {
@@ -297,6 +297,7 @@ export function useAudioPlayer() {
         name: file.name.replace(/\.[^/.]+$/, ''),
         url: '',
         fileKey,
+        filePath: paths?.[i] || '',
         sourceFileName: file.name,
         duration: 0,
       };
