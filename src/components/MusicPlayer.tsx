@@ -154,7 +154,7 @@ export default function MusicPlayer({
     }
   }, [activePlaylistId, onReassociateFiles, onAddTracks, onRemoveTrack, playlists]);
 
-  const hasUnresolvedTracks = activePlaylist?.tracks.some(t => !t.url && !t.fileKey) ?? false;
+  const hasUnresolvedTracks = activePlaylist?.tracks.some(t => !t.url && !t.fileKey && !t.filePath) ?? false;
 
   const toggleExportSelect = useCallback((id: string) => {
     setExportSelected(prev => {

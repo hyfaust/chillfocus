@@ -289,28 +289,44 @@ export function useAudioPlayer() {
   }, []);
 
   const addTracksToPlaylist = useCallback((playlistId: string, files: File[], paths?: string[]) => {
+    const isTauriMode = !!paths && paths.length > 0;
+
     const newTracks: Track[] = files.map((file, i) => {
-      const fileKey = `audio_${generateId()}`;
-      saveAudioFile(fileKey, file);
-      return {
-        id: generateId(),
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        url: '',
-        fileKey,
-        filePath: paths?.[i] || '',
-        sourceFileName: file.name,
-        duration: 0,
-      };
+      if (isTauriMode) {
+        // Tauri zero-copy: only store filePath, no IndexedDB
+        return {
+          id: generateId(),
+          name: file.name.replace(/\.[^/.]+$/, ''),
+          url: '',
+          fileKey: '',
+          filePath: paths![i] || '',
+          sourceFileName: file.name,
+          duration: 0,
+        };
+      } else {
+        // Web mode: store in IndexedDB
+        const fileKey = `audio_${generateId()}`;
+        saveAudioFile(fileKey, file);
+        return {
+          id: generateId(),
+          name: file.name.replace(/\.[^/.]+$/, ''),
+          url: '',
+          fileKey,
+          filePath: '',
+          sourceFileName: file.name,
+          duration: 0,
+        };
+      }
     });
-    // Get durations
-    newTracks.forEach(async (track) => {
-      const file = await getAudioFile(track.fileKey!);
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      const audio = new Audio(url);
+
+    // Get durations using temporary blob URLs (no IndexedDB needed)
+    newTracks.forEach((track, i) => {
+      const file = files[i];
+      const tempUrl = URL.createObjectURL(file);
+      const audio = new Audio(tempUrl);
       audio.addEventListener('loadedmetadata', () => {
         track.duration = audio.duration;
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(tempUrl);
         setState(prev => ({
           ...prev,
           playlists: prev.playlists.map(p =>
@@ -319,6 +335,7 @@ export function useAudioPlayer() {
         }));
       });
     });
+
     setState(prev => ({
       ...prev,
       playlists: prev.playlists.map(p =>
