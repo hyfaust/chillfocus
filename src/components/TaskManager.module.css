@@ -3,12 +3,16 @@
   flex-direction: column;
   gap: 12px;
   height: 100%;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .title {
@@ -32,10 +36,12 @@
 .addRow {
   display: flex;
   gap: 6px;
+  min-width: 0;
 }
 
 .input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -118,6 +124,7 @@
   background: var(--bg-card);
   border-left: 3px solid var(--accent);
   transition: opacity 0.2s;
+  min-width: 0;
 }
 
 .itemDone { opacity: 0.5; }

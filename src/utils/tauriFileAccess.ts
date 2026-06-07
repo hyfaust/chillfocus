@@ -15,7 +15,7 @@ async function getTauriModules() {
 }
 
 export async function isTauri(): Promise<boolean> {
-  return !!(window as any).__TAURI__ || !!(await getTauriModules());
+  return !!(window as any).__TAURI_INTERNALS__ || !!(await getTauriModules());
 }
 
 export interface LocalFileResult {

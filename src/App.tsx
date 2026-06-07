@@ -22,6 +22,7 @@ function loadShortcuts(): { local: ShortcutConfig; global: ShortcutConfig; globa
   } catch { return { local: DEFAULT_LOCAL, global: EMPTY_SHORTCUTS, globalEnabled: false }; }
 }
 
+const isTauriEnv = () => !!(window as any).__TAURI_INTERNALS__;
 const EMPTY_SHORTCUTS: ShortcutConfig = { togglePomodoro: '', toggleMusic: '', nextTrack: '', volumeUp: '', volumeDown: '' };
 const DEFAULT_LOCAL: ShortcutConfig = { togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', volumeUp: 'ArrowUp', volumeDown: 'ArrowDown' };
 
@@ -124,7 +125,7 @@ function App() {
   useEffect(() => {
     let mounted = true;
     const setup = async () => {
-      if (!(window as any).__TAURI__) return;
+      if (!isTauriEnv()) return;
       const { register, unregister: unreg } = await import('@tauri-apps/plugin-global-shortcut');
       if (!mounted) return;
 
@@ -148,13 +149,18 @@ function App() {
       for (const [action, combo] of Object.entries(shortcuts)) {
         if (!combo) continue;
         const tauriKey = convertToTauriShortcut(combo);
-        try { await register(tauriKey, () => actionMap[action]?.()); } catch { /* conflict */ }
+        try {
+          await register(tauriKey, (event) => {
+            if (event.state !== 'Pressed') return;
+            actionMap[action]?.();
+          });
+        } catch { /* shortcut conflict */ }
       }
     };
     setup();
     return () => {
       mounted = false;
-      if (!(window as any).__TAURI__) return;
+      if (!isTauriEnv()) return;
       import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
         const { global: shortcuts } = loadShortcuts();
         for (const combo of Object.values(shortcuts)) {
