@@ -72,6 +72,26 @@
 - Dual-layer rendering: floating (fixed) and pinned (scrolls with page)
 - localStorage persistence
 
+### Desktop-Only Features (Tauri)
+
+#### System Tray
+- Minimize to system tray on window close (configurable in Settings)
+- Left-click tray icon to show/focus the window
+- Right-click tray icon for quick menu: show window, toggle Pomodoro, toggle music, quit
+- "Force quit" button in Settings to exit completely
+
+#### Global Shortcuts
+- System-wide hotkeys that work when the app is in the background
+- Configurable per-action: toggle Pomodoro, toggle music, next track, volume up/down
+- Enable/disable toggle in Settings
+- Auto-re-register when shortcuts are changed in Settings
+- Key format auto-conversion from web key names to Tauri's native format
+
+#### Responsive Layout
+- Fluid grid layout with breakpoints at 1024px and 768px
+- Task list and music player scale proportionally with window width
+- Single-column layout on narrow screens
+
 ## Demo
 
 ### Web
@@ -203,7 +223,8 @@ chillfocus/
 │       ├── MusicPlayer.tsx       # Full-featured music player
 │       ├── AmbientSounds.tsx     # Ambient sound mixer
 │       ├── TaskManager.tsx       # Task list with priorities and colors
-│       └── StickyNotes.tsx       # Floating/sticky note system
+│       ├── StickyNotes.tsx       # Floating/sticky note system
+│       └── GlobalSettings.tsx    # Settings: tray, shortcuts, force quit
 ├── src-tauri/                   # Tauri desktop shell
 │   ├── src/
 │   │   ├── main.rs              # Tauri entry point
@@ -274,7 +295,7 @@ Formats are validated at import time via a shared whitelist in `audioFormats.ts`
 - **Font**: Inter (200–600 weights), tabular-nums for timers
 - **Spacing**: 8px base unit grid
 - **Colors**: Purple accent `#7c5dfa`, card surface `rgba(255,255,255,0.04)`, border `rgba(255,255,255,0.08)`
-- **Responsive**: Desktop-first, single breakpoint at 768px
+- **Responsive**: Desktop-first, breakpoints at 1024px and 768px
 
 See [UI-DESIGN.md](docs/UI-DESIGN.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [DESIGN-GLOSSARY.md](docs/DESIGN-GLOSSARY.md) for complete documentation.
 

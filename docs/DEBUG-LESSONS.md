@@ -1,4 +1,4 @@
-# ChillFocus 调试经验：播放列表持久化与 Tauri 文件系统
+# ChillFocus 调试经验与开发教训
 
 ## 背景
 
@@ -155,3 +155,231 @@ Tauri: dialog.open() → fs.readFile() → File → IndexedDB
 ```
 
 共享上层逻辑，平台差异封装在底层工具函数中。
+
+---
+
+## 第五阶段：Tauri 全局快捷键系统
+
+### 问题 1：`window.__TAURI__` 未定义
+
+**现象**：全局快捷键注册代码完全不执行，`console.warn('[GS] Not Tauri env')` 在 Tauri 打包后的应用中反复输出。
+
+**根因**：Tauri v1 使用 `window.__TAURI__` 注入 IPC 桥接，但 **Tauri v2 改为 `window.__TAURI_INTERNALS__`**。项目中所有检查 `window.__TAURI__` 的地方全部返回 `false`。
+
+**影响范围**：
+- `App.tsx` — 全局快捷键注册被跳过
+- `utils/tauriFileAccess.ts` — `isTauri()` 首选路径失败（fallback 到动态 import 仍可用）
+- `utils/openUrl.ts` — 外部链接打开方式回退到 `window.open`
+
+**修复**：将所有 `(window as any).__TAURI__` 改为 `(window as any).__TAURI_INTERNALS__`。
+
+**教训**：
+> **Tauri v1 → v2 的 breaking change 之一：IPC 桥接对象从 `window.__TAURI__` 变为 `window.__TAURI_INTERNALS__`。检测 Tauri 环境应使用后者。**
+
+### 问题 2：全局快捷键键名格式不匹配
+
+**现象**：环境检测通过后，`register()` 调用不报错但快捷键不触发。
+
+**分析**：Web 端 `KeyboardEvent.key` 产生的键名与 Tauri 全局快捷键插件期望的格式不同：
+
+| Web 端 (KeyboardEvent.key) | Tauri 端 (muda accelerator) |
+|---|---|
+| `Space` | `space` |
+| `ArrowUp` | `arrowup` |
+| `Escape` | `escape` |
+| `A` (单字母) | `A`（大写保留） |
+| `Ctrl` | `Ctrl`（修饰键保留） |
+
+**修复**：新增 `convertToTauriShortcut()` 函数，在注册前转换键名：
+
+```typescript
+function convertToTauriShortcut(combo: string): string {
+  const parts = combo.split('+').map(s => s.trim());
+  const keyMap: Record<string, string> = {
+    space: 'space', arrowup: 'arrowup', arrowdown: 'arrowdown',
+    arrowleft: 'arrowleft', arrowright: 'arrowright',
+    escape: 'escape', enter: 'enter', backspace: 'backspace',
+    delete: 'delete', tab: 'tab', home: 'home', end: 'end',
+    pageup: 'pageup', pagedown: 'pagedown',
+  };
+  return parts.map((part, i) => {
+    if (i < parts.length - 1) return part; // 修饰键保持原样
+    const lower = part.toLowerCase();
+    return keyMap[lower] || (part.length === 1 ? part : lower);
+  }).join('+');
+}
+```
+
+**教训**：
+> **Web 端的 `KeyboardEvent.key` 和 Tauri 的 muda accelerator 使用不同的键名约定。非字母特殊键在 Tauri 端必须为小写（`space`、`arrowup`），单字母键保持大写（`A`）。注册全局快捷键前必须做格式转换。**
+
+### 问题 3：快捷键按下和释放各触发一次
+
+**现象**：每次按快捷键执行两次操作。
+
+**根因**：Tauri 的 `register()` 回调在 `Pressed` 和 `Released` 两个状态都会触发。
+
+**修复**：在回调中过滤状态：
+
+```typescript
+await register(tauriKey, (event) => {
+  if (event.state !== 'Pressed') return;
+  actionMap[action]?.();
+});
+```
+
+**教训**：
+> **Tauri v2 的 `ShortcutEvent` 包含 `state: 'Pressed' | 'Released'`。全局快捷键回调必须检查 `event.state`，通常只在 `'Pressed'` 时执行操作。**
+
+### 问题 4：快捷键设置后不生效
+
+**现象**：在设置面板中修改全局快捷键后，新快捷键不工作。
+
+**根因**：全局快捷键在 App 组件挂载时注册一次，设置面板修改的是 localStorage，App 的 useEffect 不会重新运行。
+
+**修复**：
+1. `GlobalSettings` 在快捷键变更时 `dispatchEvent(new Event('chillfocus-shortcuts-changed'))`
+2. `App` 监听该事件，递增 `shortcutVersion` state
+3. 全局快捷键 useEffect 依赖 `shortcutVersion`，变更时先注销旧快捷键再注册新快捷键
+
+**教训**：
+> **同一页面内的组件间通信不能依赖 `storage` 事件（只在跨 tab 时触发）。使用自定义 DOM 事件（`dispatchEvent` / `addEventListener`）是同页面组件间通信的轻量方案。**
+
+---
+
+## 第六阶段：快捷键架构重构
+
+### 问题：快捷键回调引用过时的 state
+
+**现象**：快捷键执行的操作使用的是组件挂载时的 state 快照，而不是最新值。
+
+**根因**：`useEffect` 的闭包捕获了当时的 `pomodoro` 和 `player` 对象。由于快捷键设置依赖数组包含这些对象，每次 state 变化都会重新注册监听器，导致频繁的 addEventListener/removeEventListener 循环。
+
+**修复**：使用 `useRef` 模式保持回调稳定：
+
+```typescript
+const pomodoroRef = useRef(pomodoro);
+pomodoroRef.current = pomodoro;
+const playerRef = useRef(player);
+playerRef.current = player;
+
+// useEffect 回调中通过 ref 访问最新值
+const handleKeyDown = (e: KeyboardEvent) => {
+  const p = pomodoroRef.current; // 始终是最新值
+  if (p.isRunning) p.pause(); else p.start();
+};
+```
+
+同时将快捷键处理从 `GlobalSettings` 提升到 `App` 层级：
+- 局部快捷键：每次 keydown 从 localStorage 实时读取配置，无需重新挂载监听
+- 全局快捷键：在 App 层统一注册/注销
+
+**教训**：
+> **当 useEffect 回调需要访问频繁变化的值但又不想让 effect 重新运行时，使用 `useRef` + 每次 render 更新 ref 的模式。这避免了"依赖数组膨胀导致 effect 频繁重建"的问题。**
+
+---
+
+## 第七阶段：音频暂停/恢复
+
+### 问题：播放按钮变成"停止/播放"而非"暂停/播放"
+
+**现象**：点击暂停后再点击播放，音乐从头开始而不是从暂停位置恢复。
+
+**根因**：`play()` 函数每次都重新设置 `audio.src`：
+
+```typescript
+// 问题代码
+audio.src = url;  // 重新设置 src 会重置播放位置
+audio.play();
+```
+
+**修复**：只在 audio 尚未加载源时才设置 src：
+
+```typescript
+if (!audio.src || audio.src === window.location.href) {
+  audio.src = url;
+}
+audio.play();
+```
+
+**教训**：
+> **HTMLAudioElement 的 `src` 属性重新赋值会重置播放状态（currentTime 归零）。暂停/恢复应只调用 `audio.play()` / `audio.pause()`，不要重新设置 src。**
+
+---
+
+## 第八阶段：响应式布局
+
+### 问题：任务列表出现水平滚动条
+
+**现象**：窗口变窄时，任务列表容器出现水平滚动条，任务项溢出。
+
+**根因**：CSS Flexbox/Grid 布局中，子元素默认 `min-width: auto`，即不会小于内容的固有宽度。当容器变窄时，子元素（如任务项的 checkbox + 文本 + 按钮）无法收缩，导致溢出。
+
+**修复**：
+
+```css
+.container { overflow-x: hidden; min-width: 0; }
+.item { min-width: 0; }
+.addRow { min-width: 0; }
+.input { flex: 1; min-width: 0; }
+```
+
+同时在 `.panel` 上添加 `overflow-x: hidden`。
+
+**教训**：
+> **Flex/Grid 子元素在容器变窄时可能无法收缩，因为默认 `min-width: auto`。需要显式设置 `min-width: 0` 来允许收缩。配合 `overflow-x: hidden` 防止溢出产生滚动条。这是 CSS 布局中最常见的响应式陷阱之一。**
+
+---
+
+## 更新后的关键经验总结
+
+### 1. Tauri v2 环境检测
+
+```typescript
+// ❌ Tauri v1（已废弃）
+if (window.__TAURI__) { ... }
+
+// ✅ Tauri v2
+if (window.__TAURI_INTERNALS__) { ... }
+```
+
+### 2. 全局快捷键完整流程
+
+```
+用户设置快捷键（如 "Ctrl+Space"）
+    ↓
+GlobalSettings 写入 localStorage
+    ↓
+dispatchEvent('chillfocus-shortcuts-changed')
+    ↓
+App 监听事件 → shortcutVersion++
+    ↓
+useEffect 重新运行 → convertToTauriShortcut("Ctrl+Space") → "Ctrl+space"
+    ↓
+register("Ctrl+space", handler) → 仅 event.state === 'Pressed' 时执行
+```
+
+### 3. 组件间通信方案选择
+
+| 场景 | 方案 |
+|------|------|
+| 父 → 子 | Props |
+| 子 → 父 | Callback props |
+| 同页面跨组件 | 自定义 DOM 事件 (`dispatchEvent`) |
+| 跨 tab / 跨窗口 | `storage` 事件 |
+| 全局状态 | Context / 外部 store |
+
+### 4. React 中访问最新值的模式
+
+| 需求 | 方案 |
+|------|------|
+| 回调中需要最新值但不想重建 effect | `useRef` + 每次 render 更新 |
+| 事件处理器需要最新配置 | 每次触发时从 localStorage 读取 |
+| 稳定的回调引用 | `useCallback` + ref 间接访问 |
+
+### 5. CSS 响应式防溢出清单
+
+- Flex/Grid 子元素：加 `min-width: 0`
+- 容器：加 `overflow-x: hidden`
+- 文本截断：`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
+- 弹性宽度：`flex: 1; min-width: 0` 代替固定 `max-width`
