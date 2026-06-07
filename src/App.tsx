@@ -38,6 +38,22 @@ function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
          e.metaKey === mods.includes('Super');
 }
 
+function convertToTauriShortcut(combo: string): string {
+  const parts = combo.split('+').map(s => s.trim());
+  const keyMap: Record<string, string> = {
+    space: 'space', arrowup: 'arrowup', arrowdown: 'arrowdown',
+    arrowleft: 'arrowleft', arrowright: 'arrowright',
+    escape: 'escape', enter: 'enter', backspace: 'backspace',
+    delete: 'delete', tab: 'tab', home: 'home', end: 'end',
+    pageup: 'pageup', pagedown: 'pagedown',
+  };
+  return parts.map((part, i) => {
+    if (i < parts.length - 1) return part; // modifiers: Ctrl, Alt, Shift, Super
+    const lower = part.toLowerCase();
+    return keyMap[lower] || (part.length === 1 ? part : lower);
+  }).join('+');
+}
+
 function App() {
   const pomodoro = usePomodoro();
   const player = useAudioPlayer();
@@ -115,7 +131,7 @@ function App() {
       // Unregister previous shortcuts first
       const { global: prevShortcuts } = loadShortcuts();
       for (const combo of Object.values(prevShortcuts)) {
-        if (combo) await unreg(combo).catch(() => {});
+        if (combo) await unreg(convertToTauriShortcut(combo)).catch(() => {});
       }
 
       const { global: shortcuts, globalEnabled } = loadShortcuts();
@@ -131,7 +147,8 @@ function App() {
 
       for (const [action, combo] of Object.entries(shortcuts)) {
         if (!combo) continue;
-        try { await register(combo, () => actionMap[action]?.()); } catch { /* conflict */ }
+        const tauriKey = convertToTauriShortcut(combo);
+        try { await register(tauriKey, () => actionMap[action]?.()); } catch { /* conflict */ }
       }
     };
     setup();
@@ -141,7 +158,7 @@ function App() {
       import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
         const { global: shortcuts } = loadShortcuts();
         for (const combo of Object.values(shortcuts)) {
-          if (combo) unregister(combo).catch(() => {});
+          if (combo) unregister(convertToTauriShortcut(combo)).catch(() => {});
         }
       });
     };

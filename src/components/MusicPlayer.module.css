@@ -201,7 +201,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  flex: 1;
+  min-width: 0;
 }
 
 .trackTime {
@@ -318,6 +319,7 @@
 
 .volumeSlider {
   width: 70px;
+  max-width: 70px;
   height: 4px;
   -webkit-appearance: none;
   appearance: none;
@@ -342,6 +344,7 @@
   border-radius: 10px;
   padding: 8px;
   height: 200px;
+  min-height: 120px;
   transition: border-color 0.2s;
 }
 
@@ -724,4 +727,31 @@
   font-size: 12px;
   cursor: pointer;
   align-self: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .trackListWrap {
+    height: 160px;
+  }
+
+  .volumeSlider {
+    width: 50px;
+    max-width: 50px;
+  }
+
+  .controls {
+    gap: 4px;
+  }
+
+  .modeBtn,
+  .controlBtn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .playBtn {
+    width: 36px;
+    height: 36px;
+  }
 }

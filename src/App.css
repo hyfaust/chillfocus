@@ -29,7 +29,7 @@
 
 .bottom-panels {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) 1fr;
+  grid-template-columns: minmax(240px, 320px) 1fr;
   gap: clamp(12px, 1.5vw, 24px);
   align-items: start;
   flex: 1;
@@ -55,7 +55,7 @@
 
 .music-panel {
   max-height: 100%;
-  overflow: visible;
+  overflow: auto;
   padding-bottom: 4px;
 }
 
@@ -91,6 +91,12 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .bottom-panels {
+    grid-template-columns: minmax(220px, 280px) 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .app {
     padding: 0 12px;

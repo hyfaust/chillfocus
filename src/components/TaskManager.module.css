@@ -106,7 +106,7 @@
   gap: 4px;
   overflow-y: auto;
   flex: 1;
-  max-height: 280px;
+  min-height: 0;
 }
 
 .item {
