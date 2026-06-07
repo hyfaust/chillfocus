@@ -6,12 +6,14 @@ import TaskManager from './components/TaskManager';
 import MusicPlayer from './components/MusicPlayer';
 import AmbientSounds from './components/AmbientSounds';
 import StickyNotes from './components/StickyNotes';
+import GlobalSettings from './components/GlobalSettings';
 import './App.css';
 
 function App() {
   const pomodoro = usePomodoro();
   const player = useAudioPlayer();
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const ensureAnalyser = useCallback(() => {
     if (analyser) return analyser;
@@ -21,12 +23,35 @@ function App() {
   }, [analyser, player]);
 
   useEffect(() => {
-    const handleClick = () => {
-      ensureAnalyser();
-    };
+    const handleClick = () => ensureAnalyser();
     document.addEventListener('click', handleClick, { once: true });
     return () => document.removeEventListener('click', handleClick);
   }, [ensureAnalyser]);
+
+  // Expose toggle functions for Tauri tray menu
+  useEffect(() => {
+    (window as any).__togglePomodoro = () => {
+      if (pomodoro.isRunning) pomodoro.pause();
+      else pomodoro.start();
+    };
+    (window as any).__toggleMusic = () => {
+      ensureAnalyser();
+      player.togglePlay();
+    };
+  }, [pomodoro, player, ensureAnalyser]);
+
+  const handleVolumeUp = useCallback(() => {
+    player.setVolume(Math.min(1, player.volume + 0.1));
+  }, [player]);
+
+  const handleVolumeDown = useCallback(() => {
+    player.setVolume(Math.max(0, player.volume - 0.1));
+  }, [player]);
+
+  const handleNextTrack = useCallback(() => {
+    ensureAnalyser();
+    player.next();
+  }, [player, ensureAnalyser]);
 
   return (
     <div className="app">
@@ -79,7 +104,30 @@ function App() {
         </div>
       </main>
 
+      {/* Settings icon — bottom left, next to sticky notes icon */}
+      <button
+        className="settings-icon"
+        onClick={() => setShowSettings(true)}
+        title="设置"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+      </button>
+
       <StickyNotes />
+
+      {showSettings && (
+        <GlobalSettings
+          onClose={() => setShowSettings(false)}
+          onTogglePomodoro={() => { if (pomodoro.isRunning) pomodoro.pause(); else pomodoro.start(); }}
+          onToggleMusic={() => { ensureAnalyser(); player.togglePlay(); }}
+          onNextTrack={handleNextTrack}
+          onVolumeUp={handleVolumeUp}
+          onVolumeDown={handleVolumeDown}
+        />
+      )}
     </div>
   );
 }
