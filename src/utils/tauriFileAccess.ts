@@ -1,3 +1,5 @@
+import { SUPPORTED_AUDIO_EXTENSIONS } from './audioFormats';
+
 let tauriDialog: typeof import('@tauri-apps/plugin-dialog') | null = null;
 let tauriFs: typeof import('@tauri-apps/plugin-fs') | null = null;
 
@@ -97,4 +99,36 @@ export function filesToFileArray(results: LocalFileResult[]): File[] {
 
 export function filesToFilePaths(results: LocalFileResult[]): string[] {
   return results.map(r => r.path);
+}
+
+async function scanDirRecursive(
+  fs: typeof import('@tauri-apps/plugin-fs'),
+  dir: string,
+  results: LocalFileResult[],
+) {
+  const entries = await fs.readDir(dir);
+  for (const entry of entries) {
+    const fullPath = `${dir}\\${entry.name}`;
+    if (entry.isDirectory) {
+      await scanDirRecursive(fs, fullPath, results);
+    } else if (entry.isFile && SUPPORTED_AUDIO_EXTENSIONS.test(entry.name)) {
+      try {
+        const data = await fs.readFile(fullPath);
+        const file = new File([data], entry.name);
+        results.push({ name: entry.name, path: fullPath, file });
+      } catch { /* skip unreadable files */ }
+    }
+  }
+}
+
+export async function selectAudioDirectoryRecursive(): Promise<LocalFileResult[]> {
+  const mods = await getTauriModules();
+  if (!mods) return [];
+
+  const dir = await mods.dialog.open({ directory: true });
+  if (!dir || typeof dir !== 'string') return [];
+
+  const results: LocalFileResult[] = [];
+  await scanDirRecursive(mods.fs, dir as string, results);
+  return results;
 }

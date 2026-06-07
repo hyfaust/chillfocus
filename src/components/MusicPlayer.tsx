@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles } from '../utils/audioFormats';
-import { isTauri, selectAudioFiles, selectAudioDirectory, filesToFileArray, filesToFilePaths } from '../utils/tauriFileAccess';
+import { isTauri, selectAudioFiles, selectAudioDirectory, selectAudioDirectoryRecursive, filesToFileArray, filesToFilePaths } from '../utils/tauriFileAccess';
 import styles from './MusicPlayer.module.css';
 
 interface Props {
@@ -95,6 +95,14 @@ export default function MusicPlayer({
       const files = filterAudioFiles(Array.from(e.target.files || []));
       if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [activePlaylistId, onAddTracks]);
+
+  const handleFolderSelect = useCallback(async () => {
+    if (!activePlaylistId) return;
+    const results = await selectAudioDirectoryRecursive();
+    if (results.length) {
+      onAddTracks(activePlaylistId, filesToFileArray(results), filesToFilePaths(results));
     }
   }, [activePlaylistId, onAddTracks]);
 
@@ -346,6 +354,9 @@ export default function MusicPlayer({
               <div className={styles.dropdown}>
                 <button className={styles.dropdownAction} onClick={() => { handleFileSelect(); setShowAddMenu(false); }}>
                   📁 本地文件
+                </button>
+                <button className={styles.dropdownAction} onClick={() => { handleFolderSelect(); setShowAddMenu(false); }}>
+                  📂 添加文件夹
                 </button>
                 <div className={styles.dropdownDivider} />
                 <input className={styles.dropdownInput} type="text" placeholder="曲目名称（可选）" value={addUrlName}
