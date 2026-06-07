@@ -418,8 +418,12 @@ export function useAudioPlayer() {
   const play = useCallback(async () => {
     const audio = getAudio();
     if (state.currentTrack) {
-      if (!state.currentTrack.url || state.currentTrack.url.startsWith('blob:')) {
-        const url = await resolveTrackUrl(state.currentTrack);
+      // Only set src if audio doesn't have one yet or track URL changed
+      if (!audio.src || audio.src === window.location.href) {
+        let url = state.currentTrack.url;
+        if (!url || url.startsWith('blob:')) {
+          url = await resolveTrackUrl(state.currentTrack);
+        }
         if (url) audio.src = url;
       }
       audio.play().catch(() => {});

@@ -97,13 +97,26 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [ensureAnalyser]);
 
-  // Global shortcuts (Tauri only)
+  // Global shortcuts (Tauri only) — re-register when settings change
+  const [shortcutVersion, setShortcutVersion] = useState(0);
+  useEffect(() => {
+    const onChanged = () => setShortcutVersion(v => v + 1);
+    window.addEventListener('chillfocus-shortcuts-changed', onChanged);
+    return () => window.removeEventListener('chillfocus-shortcuts-changed', onChanged);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     const setup = async () => {
       if (!(window as any).__TAURI__) return;
-      const { register } = await import('@tauri-apps/plugin-global-shortcut');
+      const { register, unregister: unreg } = await import('@tauri-apps/plugin-global-shortcut');
       if (!mounted) return;
+
+      // Unregister previous shortcuts first
+      const { global: prevShortcuts } = loadShortcuts();
+      for (const combo of Object.values(prevShortcuts)) {
+        if (combo) await unreg(combo).catch(() => {});
+      }
 
       const { global: shortcuts, globalEnabled } = loadShortcuts();
       if (!globalEnabled) return;
@@ -132,7 +145,7 @@ function App() {
         }
       });
     };
-  }, [ensureAnalyser]);
+  }, [ensureAnalyser, shortcutVersion]);
 
 
   return (

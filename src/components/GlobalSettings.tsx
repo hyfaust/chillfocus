@@ -75,6 +75,11 @@ export default function GlobalSettings({ onClose }: Props) {
     });
   }, [settings.minimizeToTray, isTauriEnv]);
 
+  // Notify App when global shortcuts change
+  useEffect(() => {
+    window.dispatchEvent(new Event('chillfocus-shortcuts-changed'));
+  }, [settings.globalShortcuts, settings.globalShortcutsEnabled]);
+
   const updateSetting = useCallback(<K extends keyof GlobalSettingsData>(key: K, value: GlobalSettingsData[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
   }, [setSettings]);
@@ -99,6 +104,10 @@ export default function GlobalSettings({ onClose }: Props) {
   const handleKeyCapture = (action: string, scope: 'local' | 'global', e: React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // Escape cancels editing
+    if (e.key === 'Escape') { setEditingKey(null); return; }
+    // Ignore modifier-only keys — wait for the actual key in the combo
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
     const combo = formatKeyCombo(e.nativeEvent);
     if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, combo);
     else updateGlobalShortcut(action as keyof ShortcutConfig, combo);
@@ -130,6 +139,7 @@ export default function GlobalSettings({ onClose }: Props) {
             className={`${styles.shortcutKey} ${isEditing ? styles.shortcutKeyEditing : ''}`}
             onClick={() => setEditingKey(editId)}
             onKeyDown={isEditing ? (e) => handleKeyCapture(action, scope, e) : undefined}
+            onBlur={() => { if (isEditing) setEditingKey(null); }}
             tabIndex={0}
           >
             {isEditing ? '按下按键...' : combo || '未设置'}
