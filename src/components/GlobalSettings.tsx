@@ -18,7 +18,15 @@ export interface GlobalSettingsData {
   globalShortcutsEnabled: boolean;
 }
 
-const DEFAULT_SHORTCUTS: ShortcutConfig = {
+const EMPTY_SHORTCUTS: ShortcutConfig = {
+  togglePomodoro: '',
+  toggleMusic: '',
+  nextTrack: '',
+  volumeUp: '',
+  volumeDown: '',
+};
+
+const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
   togglePomodoro: 'Space',
   toggleMusic: 'm',
   nextTrack: 'n',
@@ -28,8 +36,8 @@ const DEFAULT_SHORTCUTS: ShortcutConfig = {
 
 const DEFAULT_SETTINGS: GlobalSettingsData = {
   minimizeToTray: false,
-  localShortcuts: { ...DEFAULT_SHORTCUTS },
-  globalShortcuts: { ...DEFAULT_SHORTCUTS },
+  localShortcuts: { ...DEFAULT_LOCAL_SHORTCUTS },
+  globalShortcuts: { ...EMPTY_SHORTCUTS },
   globalShortcutsEnabled: false,
 };
 
@@ -40,6 +48,36 @@ interface Props {
   onNextTrack: () => void;
   onVolumeUp: () => void;
   onVolumeDown: () => void;
+}
+
+function formatKeyCombo(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.metaKey) parts.push('Super');
+  const key = e.key;
+  if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
+    parts.push(key.length === 1 ? key.toUpperCase() : key);
+  }
+  return parts.join('+');
+}
+
+function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
+  if (!combo) return false;
+  const parts = combo.split('+').map(s => s.trim());
+  const key = parts[parts.length - 1];
+  const mods = parts.slice(0, -1);
+
+  const keyMatch = e.key === key || e.key.toLowerCase() === key.toLowerCase() || e.code === key;
+  if (!keyMatch) return false;
+
+  const needCtrl = mods.includes('Ctrl');
+  const needAlt = mods.includes('Alt');
+  const needShift = mods.includes('Shift');
+  const needMeta = mods.includes('Super');
+
+  return e.ctrlKey === needCtrl && e.altKey === needAlt && e.shiftKey === needShift && e.metaKey === needMeta;
 }
 
 export default function GlobalSettings({
@@ -77,12 +115,9 @@ export default function GlobalSettings({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      const key = e.key;
-      for (const [action, shortcut] of Object.entries(settings.localShortcuts)) {
-        if (key === shortcut || (e.code === shortcut)) {
+      for (const [action, combo] of Object.entries(settings.localShortcuts)) {
+        if (matchesKeyCombo(e, combo)) {
           e.preventDefault();
           actionMap[action]?.();
           return;
@@ -101,7 +136,6 @@ export default function GlobalSettings({
     let mounted = true;
     const setup = async () => {
       const { register, unregister } = await import('@tauri-apps/plugin-global-shortcut');
-
       if (!mounted) return;
 
       const actionMap: Record<string, () => void> = {
@@ -112,12 +146,15 @@ export default function GlobalSettings({
         volumeDown: onVolumeDown,
       };
 
+      // Unregister all first
+      for (const shortcut of Object.values(settings.globalShortcuts)) {
+        if (shortcut) await unregister(shortcut).catch(() => {});
+      }
+
       for (const [action, shortcut] of Object.entries(settings.globalShortcuts)) {
+        if (!shortcut) continue;
         try {
-          await unregister(shortcut);
-          await register(shortcut, () => {
-            actionMap[action]?.();
-          });
+          await register(shortcut, () => { actionMap[action]?.(); });
         } catch { /* shortcut may conflict */ }
       }
     };
@@ -127,7 +164,7 @@ export default function GlobalSettings({
       mounted = false;
       import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
         for (const shortcut of Object.values(settings.globalShortcuts)) {
-          unregister(shortcut).catch(() => {});
+          if (shortcut) unregister(shortcut).catch(() => {});
         }
       });
     };
@@ -137,18 +174,12 @@ export default function GlobalSettings({
     setSettings(prev => ({ ...prev, [key]: value }));
   }, [setSettings]);
 
-  const updateLocalShortcut = useCallback((action: keyof ShortcutConfig, key: string) => {
-    setSettings(prev => ({
-      ...prev,
-      localShortcuts: { ...prev.localShortcuts, [action]: key },
-    }));
+  const updateLocalShortcut = useCallback((action: keyof ShortcutConfig, combo: string) => {
+    setSettings(prev => ({ ...prev, localShortcuts: { ...prev.localShortcuts, [action]: combo } }));
   }, [setSettings]);
 
-  const updateGlobalShortcut = useCallback((action: keyof ShortcutConfig, key: string) => {
-    setSettings(prev => ({
-      ...prev,
-      globalShortcuts: { ...prev.globalShortcuts, [action]: key },
-    }));
+  const updateGlobalShortcut = useCallback((action: keyof ShortcutConfig, combo: string) => {
+    setSettings(prev => ({ ...prev, globalShortcuts: { ...prev.globalShortcuts, [action]: combo } }));
   }, [setSettings]);
 
   const handleForceQuit = useCallback(async () => {
@@ -163,9 +194,15 @@ export default function GlobalSettings({
   const handleKeyCapture = (action: string, scope: 'local' | 'global', e: React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const key = e.key === ' ' ? 'Space' : e.key;
-    if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, key);
-    else updateGlobalShortcut(action as keyof ShortcutConfig, key);
+    const combo = formatKeyCombo(e.nativeEvent);
+    if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, combo);
+    else updateGlobalShortcut(action as keyof ShortcutConfig, combo);
+    setEditingKey(null);
+  };
+
+  const clearShortcut = (action: string, scope: 'local' | 'global') => {
+    if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, '');
+    else updateGlobalShortcut(action as keyof ShortcutConfig, '');
     setEditingKey(null);
   };
 
@@ -175,6 +212,29 @@ export default function GlobalSettings({
     nextTrack: '下一首',
     volumeUp: '增大音量',
     volumeDown: '减小音量',
+  };
+
+  const renderShortcutRow = (action: string, label: string, scope: 'local' | 'global', combo: string) => {
+    const editId = `${scope}-${action}`;
+    const isEditing = editingKey === editId;
+    return (
+      <div key={action} className={styles.shortcutRow}>
+        <span className={styles.shortcutLabel}>{label}</span>
+        <div className={styles.shortcutBtns}>
+          <button
+            className={`${styles.shortcutKey} ${isEditing ? styles.shortcutKeyEditing : ''}`}
+            onClick={() => setEditingKey(editId)}
+            onKeyDown={isEditing ? (e) => handleKeyCapture(action, scope, e) : undefined}
+            tabIndex={0}
+          >
+            {isEditing ? '按下按键...' : combo || '未设置'}
+          </button>
+          {combo && (
+            <button className={styles.shortcutClear} onClick={() => clearShortcut(action, scope)} title="清除">×</button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -188,43 +248,33 @@ export default function GlobalSettings({
         {/* Minimize to tray */}
         {isTauriEnv && (
           <div className={styles.section}>
-            <label className={styles.toggleLabel}>
-              <span>关闭时最小化到托盘</span>
-              <span className={styles.toggleDesc}>点击关闭按钮隐藏到系统托盘而非退出</span>
-            </label>
-            <button
-              className={`${styles.toggle} ${settings.minimizeToTray ? styles.toggleOn : ''}`}
-              onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
-            >
-              <span className={styles.toggleKnob} />
-            </button>
+            <div className={styles.sectionHeader}>
+              <div>
+                <span className={styles.toggleTitle}>关闭时最小化到托盘</span>
+                <span className={styles.toggleDesc}>点击关闭按钮隐藏到系统托盘而非退出</span>
+              </div>
+              <button
+                className={`${styles.toggle} ${settings.minimizeToTray ? styles.toggleOn : ''}`}
+                onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            </div>
           </div>
         )}
 
         {/* Force quit */}
         <div className={styles.section}>
-          <button className={styles.quitBtn} onClick={handleForceQuit}>
-            退出程序
-          </button>
+          <button className={styles.quitBtn} onClick={handleForceQuit}>退出程序</button>
         </div>
 
         {/* Local shortcuts */}
         <div className={styles.section}>
           <h4 className={styles.sectionTitle}>局部快捷键</h4>
-          <p className={styles.sectionDesc}>应用内生效</p>
-          {Object.entries(shortcutLabels).map(([action, label]) => (
-            <div key={action} className={styles.shortcutRow}>
-              <span className={styles.shortcutLabel}>{label}</span>
-              <button
-                className={`${styles.shortcutKey} ${editingKey === `local-${action}` ? styles.shortcutKeyEditing : ''}`}
-                onClick={() => setEditingKey(`local-${action}`)}
-                onKeyDown={editingKey === `local-${action}` ? (e) => handleKeyCapture(action, 'local', e) : undefined}
-                tabIndex={0}
-              >
-                {editingKey === `local-${action}` ? '按下按键...' : settings.localShortcuts[action as keyof ShortcutConfig]}
-              </button>
-            </div>
-          ))}
+          <p className={styles.sectionDesc}>应用内生效，点击按钮后按下新按键或组合键，点 × 清除</p>
+          {Object.entries(shortcutLabels).map(([action, label]) =>
+            renderShortcutRow(action, label, 'local', settings.localShortcuts[action as keyof ShortcutConfig])
+          )}
         </div>
 
         {/* Global shortcuts */}
@@ -242,19 +292,9 @@ export default function GlobalSettings({
                 <span className={styles.toggleKnob} />
               </button>
             </div>
-            {settings.globalShortcutsEnabled && Object.entries(shortcutLabels).map(([action, label]) => (
-              <div key={action} className={styles.shortcutRow}>
-                <span className={styles.shortcutLabel}>{label}</span>
-                <button
-                  className={`${styles.shortcutKey} ${editingKey === `global-${action}` ? styles.shortcutKeyEditing : ''}`}
-                  onClick={() => setEditingKey(`global-${action}`)}
-                  onKeyDown={editingKey === `global-${action}` ? (e) => handleKeyCapture(action, 'global', e) : undefined}
-                  tabIndex={0}
-                >
-                  {editingKey === `global-${action}` ? '按下按键...' : settings.globalShortcuts[action as keyof ShortcutConfig]}
-                </button>
-              </div>
-            ))}
+            {settings.globalShortcutsEnabled && Object.entries(shortcutLabels).map(([action, label]) =>
+              renderShortcutRow(action, label, 'global', settings.globalShortcuts[action as keyof ShortcutConfig])
+            )}
           </div>
         )}
       </div>

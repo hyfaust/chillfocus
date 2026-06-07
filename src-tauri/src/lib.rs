@@ -1,6 +1,6 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 
@@ -35,10 +35,25 @@ pub fn run() {
                 .item(&quit_item)
                 .build()?;
 
+            let app_handle = app.handle().clone();
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .tooltip("ChillFocus")
+                .on_tray_icon_event(move |tray, event| {
+                    let app = tray.app_handle();
+                    match event {
+                        // Left click → show window
+                        TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        // Right click → menu is shown automatically by Tauri
+                        _ => {}
+                    }
+                })
                 .on_menu_event(move |app, event| {
                     match event.id().as_ref() {
                         "show" => {
@@ -66,18 +81,17 @@ pub fn run() {
                 .build(app)?;
 
             // --- Close to tray ---
-            let app_handle = app.handle().clone();
+            let app_handle2 = app_handle.clone();
             if let Some(window) = app.get_webview_window("main") {
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // Check minimize-to-tray setting
-                        let minimize = app_handle
+                        let minimize = app_handle2
                             .state::<AppState>()
                             .minimize_to_tray
                             .load(std::sync::atomic::Ordering::Relaxed);
                         if minimize {
                             api.prevent_close();
-                            if let Some(w) = app_handle.get_webview_window("main") {
+                            if let Some(w) = app_handle2.get_webview_window("main") {
                                 let _ = w.hide();
                             }
                         }

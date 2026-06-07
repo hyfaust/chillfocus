@@ -2,7 +2,7 @@
   position: relative;
   border-radius: 20px;
   overflow: hidden;
-  height: 320px;
+  height: clamp(240px, 35vh, 360px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -178,6 +178,6 @@
     font-size: 28px;
   }
   .container {
-    height: 280px;
+    height: 240px;
   }
 }

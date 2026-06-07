@@ -2,10 +2,8 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 clamp(12px, 3vw, 40px);
   overflow: hidden;
 }
 
@@ -14,11 +12,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 24px;
-  padding-bottom: 24px;
+  gap: clamp(12px, 2vh, 24px);
+  padding-top: clamp(12px, 2vh, 24px);
+  padding-bottom: clamp(12px, 2vh, 24px);
   overflow-y: auto;
   overflow-x: hidden;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .timer-section {
@@ -28,8 +29,8 @@
 
 .bottom-panels {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(240px, 280px) 1fr;
+  gap: clamp(12px, 1.5vw, 24px);
   align-items: start;
   flex: 1;
   min-height: 0;
@@ -64,31 +65,29 @@
   margin: 4px 0;
 }
 
-/* Settings icon */
+/* Settings icon — matches sticky notes icon style */
 .settings-icon {
   position: fixed;
   bottom: 24px;
   left: 90px;
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: 14px;
   border: none;
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  color: var(--text-secondary);
+  background: var(--accent);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 50;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(124, 93, 250, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .settings-icon:hover {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
-  transform: scale(1.05);
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(124, 93, 250, 0.5);
 }
 
 /* Responsive */
