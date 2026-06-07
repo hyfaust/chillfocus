@@ -10,7 +10,9 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF.svg)](https://vite.dev)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131.svg)](https://tauri.app)
 
-> 一款跨平台专注力助手应用，支持浏览器 Web 端和 Tauri 桌面端。集成番茄钟、音乐播放器（含音频可视化）、环境音、任务管理和浮动便签等功能，采用现代 Lo-fi 美学设计。
+> 一款Windows桌面端专注工具（或许主要是音乐播放器），集成番茄钟、音乐播放器（含音频可视化）、环境音、任务管理和浮动便签等功能，采用现代 Lo-fi 美学设计。
+
+注意!: main分支的Web版本已不再进行开发和维护，[Live Demo](https://hyfaust.xyz/chillfocus/)仅用作界面演示，很多功能无法正常工作。Web版采用IndexdDB进行本地持久化，更耗费存储空间，桌面端直接通过file path读取文件，而且有更多实用性改动，建议使用桌面端（Rust + Typescript构建，也很小巧）。
 
 ## 目录
 

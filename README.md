@@ -10,15 +10,14 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF.svg)](https://vite.dev)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131.svg)](https://tauri.app)
 
-> A cross-platform focus and productivity app — available as a web app and a native desktop application via Tauri. Featuring a Pomodoro timer, music player with audio visualization, ambient sounds, task management, and floating sticky notes — all wrapped in a modern lo-fi aesthetic.
+> A Windows desktop focus tool (perhaps mainly a music player), featuring a Pomodoro timer, music player with audio visualization, ambient sounds, task management, and floating sticky notes — all wrapped in a modern lo-fi aesthetic.
+
+**Note:** The Web version on the `main` branch is no longer under active development or maintenance. The [Live Demo](https://hyfaust.xyz/chillfocus/) is for UI preview purposes only — many features do not work properly. The Web version uses IndexedDB for local persistence, which consumes more storage. The desktop version reads files directly via file paths and includes many practical improvements. The desktop version (built with Rust + TypeScript) is recommended and is also very lightweight.
 
 ## Table of Contents
 
 - [Features](#features)
-- [Demo](#demo)
-- [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Usage](#usage)
 - [Project Structure](#project-structure)
 - [Technical Architecture](#technical-architecture)
 - [Build & Test](#build--test)
@@ -92,22 +91,9 @@
 - Task list and music player scale proportionally with window width
 - Single-column layout on narrow screens
 
-## Demo
+## Installation
 
-### Web
-
-```bash
-npm run dev
-# Open http://localhost:5173/
-```
-
-### Desktop (Tauri)
-
-```bash
-npm run tauri dev
-```
-
-## Prerequisites
+### Prerequisites
 
 | Dependency       | Version | Required          |
 |------------------|---------|-------------------|
@@ -115,8 +101,6 @@ npm run tauri dev
 | npm              | >= 9    | Yes               |
 | Rust & Cargo     | latest  | Tauri desktop only|
 
-## Installation
-
 ### Web
 
 ```bash
@@ -126,56 +110,13 @@ npm install
 npm run dev
 ```
 
+Open `http://localhost:5173/` after the dev server starts.
+
 ### Desktop (Tauri)
 
-Download the latest release `.zip` from the Releases page, extract it, and run the executable directly. No installation required.
+Download `ChillFocus-v0.1.0-win64.zip` from the Releases page, extract it, and double-click `app.exe` to run.
 
-To build from source:
-
-```bash
-git clone <repository-url>
-cd chillfocus
-npm install
-npm run tauri build
-```
-
-The output binary will be in `src-tauri/target/release/` (or the platform-specific bundle directory).
-
-## Usage
-
-### Start Web Development Server
-
-```bash
-npm run dev
-```
-
-### Start Desktop Development Server
-
-```bash
-npm run tauri dev
-```
-
-### Build for Production
-
-```bash
-# Web
-npm run build
-
-# Desktop
-npm run tauri build
-```
-
-### Preview Production Build (Web)
-
-```bash
-npm run preview
-```
-
-### Lint
-
-```bash
-npm run lint
-```
+System requirement: Windows 10 or later.
 
 ## Project Structure
 
@@ -249,15 +190,7 @@ chillfocus/
 
 ### Dual-Platform File Access
 
-ChillFocus runs on both Web and Desktop (Tauri) with a unified data layer:
-
-| Platform | File Storage | Metadata Storage | File Path Access |
-|----------|-------------|------------------|------------------|
-| Web      | IndexedDB   | localStorage     | Not available    |
-| Desktop  | IndexedDB   | localStorage     | Via `tauriFileAccess.ts` (Tauri `fs` plugin) |
-
-- `tauriFileAccess.ts` provides a cross-platform abstraction: on Tauri it reads/writes files via the native filesystem plugin and stores the `filePath` in IndexedDB; on Web it falls back to IndexedDB blob storage.
-- `openUrl.ts` opens external links via `@tauri-apps/plugin-shell` on desktop, or `window.open` on Web.
+The Web version accesses local files via `<input type="file">` and `URL.createObjectURL`. The Tauri desktop version reads and writes the local filesystem directly through the `tauriFileAccess.ts` adapter layer backed by the Rust native fs plugin, enabling seamless cross-platform file operations.
 
 ### Data Persistence
 
@@ -273,57 +206,43 @@ ChillFocus runs on both Web and Desktop (Tauri) with a unified data layer:
 | Active ambient sounds | localStorage | `chillfocus-ambient-active` |
 | Audio file binaries | IndexedDB | `chillfocus-audio` / `files` |
 
-### Audio Pipeline
-
-```
-HTMLAudioElement → MediaElementAudioSourceNode → AnalyserNode → destination
-                                                       ↓
-                                              getByteFrequencyData (128 bins)
-                                                       ↓
-                                              Canvas: 64 gradient bars @ 60fps
-```
-
 ### Audio Format Whitelist
 
 `mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a`, `opus`, `webm`, `weba`
 
-Formats are validated at import time via a shared whitelist in `audioFormats.ts`. Unsupported formats (e.g., APE) are silently rejected. This whitelist is applied consistently across Web and Desktop platforms.
-
-### Design System
-
-- **Theme**: Dark mode with Glassmorphism panels
-- **Font**: Inter (200–600 weights), tabular-nums for timers
-- **Spacing**: 8px base unit grid
-- **Colors**: Purple accent `#7c5dfa`, card surface `rgba(255,255,255,0.04)`, border `rgba(255,255,255,0.08)`
-- **Responsive**: Desktop-first, breakpoints at 1024px and 768px
+Formats are validated at import time via a shared whitelist in `audioFormats.ts`, applied consistently across Web and Desktop. Unsupported formats (e.g., APE) are silently rejected.
 
 See [UI-DESIGN.md](docs/UI-DESIGN.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [DESIGN-GLOSSARY.md](docs/DESIGN-GLOSSARY.md) for complete documentation.
 
 ## Build & Test
 
+### Web
+
 ```bash
 # Type check
 npx tsc --noEmit
 
-# Production build — Web (type check + Vite bundle)
+# Production build (type check + Vite bundle)
 npm run build
 
-# Production build — Desktop (type check + Vite bundle + Tauri bundle)
-npm run tauri build
-
-# Development — Web
-npm run dev
-
-# Development — Desktop (hot-reload)
-npm run tauri dev
+# Preview production build
+npm run preview
 
 # Lint
 npm run lint
 ```
 
-Web build output: `dist/`
+Build output: `dist/`
 
-Desktop build output: `src-tauri/target/release/` and platform-specific bundles in `src-tauri/target/release/bundle/`
+### Desktop (Tauri)
+
+```bash
+# Development (frontend hot-reload + Tauri desktop window)
+npm run tauri dev
+
+# Production build (generates installer / executable)
+npm run tauri build
+```
 
 ## License
 
