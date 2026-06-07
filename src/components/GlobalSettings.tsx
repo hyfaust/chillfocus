@@ -43,11 +43,6 @@ const DEFAULT_SETTINGS: GlobalSettingsData = {
 
 interface Props {
   onClose: () => void;
-  onTogglePomodoro: () => void;
-  onToggleMusic: () => void;
-  onNextTrack: () => void;
-  onVolumeUp: () => void;
-  onVolumeDown: () => void;
 }
 
 function formatKeyCombo(e: KeyboardEvent): string {
@@ -63,31 +58,7 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.join('+');
 }
 
-function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
-  if (!combo) return false;
-  const parts = combo.split('+').map(s => s.trim());
-  const key = parts[parts.length - 1];
-  const mods = parts.slice(0, -1);
-
-  const keyMatch = e.key === key || e.key.toLowerCase() === key.toLowerCase() || e.code === key;
-  if (!keyMatch) return false;
-
-  const needCtrl = mods.includes('Ctrl');
-  const needAlt = mods.includes('Alt');
-  const needShift = mods.includes('Shift');
-  const needMeta = mods.includes('Super');
-
-  return e.ctrlKey === needCtrl && e.altKey === needAlt && e.shiftKey === needShift && e.metaKey === needMeta;
-}
-
-export default function GlobalSettings({
-  onClose,
-  onTogglePomodoro,
-  onToggleMusic,
-  onNextTrack,
-  onVolumeUp,
-  onVolumeDown,
-}: Props) {
+export default function GlobalSettings({ onClose }: Props) {
   const [settings, setSettings] = useLocalStorage<GlobalSettingsData>('chillfocus-global-settings', DEFAULT_SETTINGS);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
@@ -103,72 +74,6 @@ export default function GlobalSettings({
       invoke('set_minimize_to_tray', { enabled: settings.minimizeToTray });
     });
   }, [settings.minimizeToTray, isTauriEnv]);
-
-  // Local shortcuts
-  useEffect(() => {
-    const actionMap: Record<string, () => void> = {
-      togglePomodoro: onTogglePomodoro,
-      toggleMusic: onToggleMusic,
-      nextTrack: onNextTrack,
-      volumeUp: onVolumeUp,
-      volumeDown: onVolumeDown,
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      for (const [action, combo] of Object.entries(settings.localShortcuts)) {
-        if (matchesKeyCombo(e, combo)) {
-          e.preventDefault();
-          actionMap[action]?.();
-          return;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.localShortcuts, onTogglePomodoro, onToggleMusic, onNextTrack, onVolumeUp, onVolumeDown]);
-
-  // Global shortcuts (Tauri only)
-  useEffect(() => {
-    if (!isTauriEnv || !settings.globalShortcutsEnabled) return;
-
-    let mounted = true;
-    const setup = async () => {
-      const { register, unregister } = await import('@tauri-apps/plugin-global-shortcut');
-      if (!mounted) return;
-
-      const actionMap: Record<string, () => void> = {
-        togglePomodoro: onTogglePomodoro,
-        toggleMusic: onToggleMusic,
-        nextTrack: onNextTrack,
-        volumeUp: onVolumeUp,
-        volumeDown: onVolumeDown,
-      };
-
-      // Unregister all first
-      for (const shortcut of Object.values(settings.globalShortcuts)) {
-        if (shortcut) await unregister(shortcut).catch(() => {});
-      }
-
-      for (const [action, shortcut] of Object.entries(settings.globalShortcuts)) {
-        if (!shortcut) continue;
-        try {
-          await register(shortcut, () => { actionMap[action]?.(); });
-        } catch { /* shortcut may conflict */ }
-      }
-    };
-    setup();
-
-    return () => {
-      mounted = false;
-      import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
-        for (const shortcut of Object.values(settings.globalShortcuts)) {
-          if (shortcut) unregister(shortcut).catch(() => {});
-        }
-      });
-    };
-  }, [isTauriEnv, settings.globalShortcutsEnabled, settings.globalShortcuts, onTogglePomodoro, onToggleMusic, onNextTrack, onVolumeUp, onVolumeDown]);
 
   const updateSetting = useCallback(<K extends keyof GlobalSettingsData>(key: K, value: GlobalSettingsData[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));

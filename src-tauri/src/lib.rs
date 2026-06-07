@@ -40,6 +40,7 @@ pub fn run() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .tooltip("ChillFocus")
+                .menu_on_left_click(false)
                 .on_tray_icon_event(move |tray, event| {
                     let app = tray.app_handle();
                     match event {

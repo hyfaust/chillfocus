@@ -70,9 +70,9 @@
   position: fixed;
   bottom: 24px;
   left: 90px;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   border: none;
   background: var(--accent);
   color: #fff;

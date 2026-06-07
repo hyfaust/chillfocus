@@ -180,7 +180,8 @@ export function useAudioPlayer() {
   }, [getAudio, resolveTrackUrl]);
 
   const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single' || mode === 'single') return { index: currentIndex, newShuffleIdx: shuffleIdx };
+    // single/loop-single auto-advance: loop-single replays, single stops
+    // But for manual next/prev (called from next()/prev()), treat them like sequential
     if (mode === 'shuffle') {
       let nextShuffleIdx = shuffleIdx + 1;
       if (nextShuffleIdx >= shuffleOrd.length) nextShuffleIdx = 0;
@@ -195,7 +196,6 @@ export function useAudioPlayer() {
   }, []);
 
   const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'loop-single' || mode === 'single') return { index: currentIndex, newShuffleIdx: shuffleIdx };
     if (mode === 'shuffle') {
       let prevShuffleIdx = shuffleIdx - 1;
       if (prevShuffleIdx < 0) prevShuffleIdx = shuffleOrd.length - 1;
@@ -219,6 +219,11 @@ export function useAudioPlayer() {
       const playlist = s.playlists.find(p => p.id === s.activePlaylistId);
       if (!playlist || !s.currentTrack) { setState(prev => ({ ...prev, isPlaying: false })); return; }
       if (s.playMode === 'single') { setState(prev => ({ ...prev, isPlaying: false })); return; }
+      if (s.playMode === 'loop-single') {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        return;
+      }
       const idx = playlist.tracks.findIndex(t => t.id === s.currentTrack!.id);
       const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.playMode, s.shuffleIndex, s.shuffleOrder);
       if (nextIdx < 0 || nextIdx >= playlist.tracks.length) { setState(prev => ({ ...prev, isPlaying: false })); return; }
@@ -240,6 +245,12 @@ export function useAudioPlayer() {
   }, [getAudio, getNextTrackIndex, resolveTrackUrl]);
 
   useEffect(() => { getAudio().volume = state.volume; }, [state.volume, getAudio]);
+
+  // Set audio.loop for loop-single mode
+  useEffect(() => {
+    const audio = getAudio();
+    audio.loop = state.playMode === 'loop-single';
+  }, [state.playMode, getAudio]);
 
   // Play timer
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePomodoro } from './hooks/usePomodoro';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import PomodoroTimer from './components/PomodoroTimer';
@@ -6,8 +6,37 @@ import TaskManager from './components/TaskManager';
 import MusicPlayer from './components/MusicPlayer';
 import AmbientSounds from './components/AmbientSounds';
 import StickyNotes from './components/StickyNotes';
-import GlobalSettings from './components/GlobalSettings';
+import GlobalSettings, { type ShortcutConfig } from './components/GlobalSettings';
 import './App.css';
+
+function loadShortcuts(): { local: ShortcutConfig; global: ShortcutConfig; globalEnabled: boolean } {
+  try {
+    const raw = localStorage.getItem('chillfocus-global-settings');
+    if (!raw) return { local: DEFAULT_LOCAL, global: EMPTY_SHORTCUTS, globalEnabled: false };
+    const d = JSON.parse(raw);
+    return {
+      local: d.localShortcuts || DEFAULT_LOCAL,
+      global: d.globalShortcuts || EMPTY_SHORTCUTS,
+      globalEnabled: d.globalShortcutsEnabled || false,
+    };
+  } catch { return { local: DEFAULT_LOCAL, global: EMPTY_SHORTCUTS, globalEnabled: false }; }
+}
+
+const EMPTY_SHORTCUTS: ShortcutConfig = { togglePomodoro: '', toggleMusic: '', nextTrack: '', volumeUp: '', volumeDown: '' };
+const DEFAULT_LOCAL: ShortcutConfig = { togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', volumeUp: 'ArrowUp', volumeDown: 'ArrowDown' };
+
+function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
+  if (!combo) return false;
+  const parts = combo.split('+').map(s => s.trim());
+  const key = parts[parts.length - 1];
+  const mods = parts.slice(0, -1);
+  const keyMatch = e.key === key || e.key.toLowerCase() === key.toLowerCase() || e.code === key;
+  if (!keyMatch) return false;
+  return e.ctrlKey === mods.includes('Ctrl') &&
+         e.altKey === mods.includes('Alt') &&
+         e.shiftKey === mods.includes('Shift') &&
+         e.metaKey === mods.includes('Super');
+}
 
 function App() {
   const pomodoro = usePomodoro();
@@ -15,43 +44,96 @@ function App() {
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Refs for stable shortcut/tray callbacks
+  const pomodoroRef = useRef(pomodoro);
+  pomodoroRef.current = pomodoro;
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const analyserRef = useRef(analyser);
+  analyserRef.current = analyser;
+
   const ensureAnalyser = useCallback(() => {
-    if (analyser) return analyser;
-    const a = player.getAnalyser();
+    if (analyserRef.current) return analyserRef.current;
+    const a = playerRef.current.getAnalyser();
     setAnalyser(a);
     return a;
-  }, [analyser, player]);
+  }, []);
 
+  // First click → init AudioContext
   useEffect(() => {
     const handleClick = () => ensureAnalyser();
     document.addEventListener('click', handleClick, { once: true });
     return () => document.removeEventListener('click', handleClick);
   }, [ensureAnalyser]);
 
-  // Expose toggle functions for Tauri tray menu
+  // Tray toggle functions (stable via refs)
   useEffect(() => {
     (window as any).__togglePomodoro = () => {
-      if (pomodoro.isRunning) pomodoro.pause();
-      else pomodoro.start();
+      const p = pomodoroRef.current;
+      if (p.isRunning) p.pause(); else p.start();
     };
     (window as any).__toggleMusic = () => {
       ensureAnalyser();
-      player.togglePlay();
+      playerRef.current.togglePlay();
     };
-  }, [pomodoro, player, ensureAnalyser]);
+  }, [ensureAnalyser]);
 
-  const handleVolumeUp = useCallback(() => {
-    player.setVolume(Math.min(1, player.volume + 0.1));
-  }, [player]);
+  // Local shortcuts — stable listener via refs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Re-read settings from localStorage each time (always fresh)
+      const { local } = loadShortcuts();
+      const p = pomodoroRef.current;
+      const pl = playerRef.current;
 
-  const handleVolumeDown = useCallback(() => {
-    player.setVolume(Math.max(0, player.volume - 0.1));
-  }, [player]);
+      if (matchesKeyCombo(e, local.togglePomodoro)) { e.preventDefault(); if (p.isRunning) p.pause(); else p.start(); return; }
+      if (matchesKeyCombo(e, local.toggleMusic)) { e.preventDefault(); ensureAnalyser(); pl.togglePlay(); return; }
+      if (matchesKeyCombo(e, local.nextTrack)) { e.preventDefault(); ensureAnalyser(); pl.next(); return; }
+      if (matchesKeyCombo(e, local.volumeUp)) { e.preventDefault(); pl.setVolume(Math.min(1, pl.volume + 0.1)); return; }
+      if (matchesKeyCombo(e, local.volumeDown)) { e.preventDefault(); pl.setVolume(Math.max(0, pl.volume - 0.1)); return; }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [ensureAnalyser]);
 
-  const handleNextTrack = useCallback(() => {
-    ensureAnalyser();
-    player.next();
-  }, [player, ensureAnalyser]);
+  // Global shortcuts (Tauri only)
+  useEffect(() => {
+    let mounted = true;
+    const setup = async () => {
+      if (!(window as any).__TAURI__) return;
+      const { register } = await import('@tauri-apps/plugin-global-shortcut');
+      if (!mounted) return;
+
+      const { global: shortcuts, globalEnabled } = loadShortcuts();
+      if (!globalEnabled) return;
+
+      const actionMap: Record<string, () => void> = {
+        togglePomodoro: () => { const p = pomodoroRef.current; if (p.isRunning) p.pause(); else p.start(); },
+        toggleMusic: () => { ensureAnalyser(); playerRef.current.togglePlay(); },
+        nextTrack: () => { ensureAnalyser(); playerRef.current.next(); },
+        volumeUp: () => { playerRef.current.setVolume(Math.min(1, playerRef.current.volume + 0.1)); },
+        volumeDown: () => { playerRef.current.setVolume(Math.max(0, playerRef.current.volume - 0.1)); },
+      };
+
+      for (const [action, combo] of Object.entries(shortcuts)) {
+        if (!combo) continue;
+        try { await register(combo, () => actionMap[action]?.()); } catch { /* conflict */ }
+      }
+    };
+    setup();
+    return () => {
+      mounted = false;
+      if (!(window as any).__TAURI__) return;
+      import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
+        const { global: shortcuts } = loadShortcuts();
+        for (const combo of Object.values(shortcuts)) {
+          if (combo) unregister(combo).catch(() => {});
+        }
+      });
+    };
+  }, [ensureAnalyser]);
+
 
   return (
     <div className="app">
@@ -96,21 +178,14 @@ function App() {
               onStartPlayTimer={player.startPlayTimer}
               onCancelPlayTimer={player.cancelPlayTimer}
             />
-
             <div className="ambient-divider" />
-
             <AmbientSounds />
           </section>
         </div>
       </main>
 
-      {/* Settings icon — bottom left, next to sticky notes icon */}
-      <button
-        className="settings-icon"
-        onClick={() => setShowSettings(true)}
-        title="设置"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <button className="settings-icon" onClick={() => setShowSettings(true)} title="设置">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
           <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
         </svg>
@@ -121,11 +196,6 @@ function App() {
       {showSettings && (
         <GlobalSettings
           onClose={() => setShowSettings(false)}
-          onTogglePomodoro={() => { if (pomodoro.isRunning) pomodoro.pause(); else pomodoro.start(); }}
-          onToggleMusic={() => { ensureAnalyser(); player.togglePlay(); }}
-          onNextTrack={handleNextTrack}
-          onVolumeUp={handleVolumeUp}
-          onVolumeDown={handleVolumeDown}
         />
       )}
     </div>
