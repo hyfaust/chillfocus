@@ -191,7 +191,7 @@ chillfocus/
 │   ├── ARCHITECTURE.md              # 技术架构文档
 │   ├── UI-DESIGN.md                 # UI 设计系统文档
 │   ├── DESIGN-GLOSSARY.md           # 前端设计术语参考
-│   └── DEBUG-LESSONS.md             # 调试经验与教训
+│   └── development-notes.md         # 开发笔记与经验教训
 ├── index.html
 ├── vite.config.ts
 ├── tsconfig.json

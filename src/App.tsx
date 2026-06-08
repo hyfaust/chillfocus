@@ -83,17 +83,22 @@ function App() {
     return () => document.removeEventListener('click', handleClick);
   }, [ensureAnalyser]);
 
-  // Sync minimizeToTray setting to Rust on mount
+  // Sync minimizeToTray + startMinimizedToTray on mount
   useEffect(() => {
     if (!isTauriEnv()) return;
-    try {
-      const raw = localStorage.getItem('chillfocus-global-settings');
-      if (!raw) return;
-      const s = JSON.parse(raw);
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('set_minimize_to_tray', { enabled: !!s.minimizeToTray });
-      });
-    } catch { /* ignore */ }
+    (async () => {
+      try {
+        const raw = localStorage.getItem('chillfocus-global-settings');
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('set_minimize_to_tray', { enabled: !!s.minimizeToTray });
+        if (s.startMinimizedToTray) {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          await getCurrentWindow().hide();
+        }
+      } catch { /* ignore */ }
+    })();
   }, []);
 
   // Tray toggle functions (stable via refs)

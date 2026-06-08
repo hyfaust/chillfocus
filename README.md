@@ -195,7 +195,7 @@ chillfocus/
 │   ├── ARCHITECTURE.md          # Technical architecture document
 │   ├── UI-DESIGN.md             # UI design system documentation
 │   ├── DESIGN-GLOSSARY.md       # Frontend design terminology reference
-│   └── DEBUG-LESSONS.md         # Debugging experience and lessons
+│   └── development-notes.md     # Development notes and lessons learned
 ├── index.html
 ├── vite.config.ts
 ├── tsconfig.json

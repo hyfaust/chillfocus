@@ -15,6 +15,8 @@ export interface ShortcutConfig {
 export interface GlobalSettingsData {
   minimizeToTray: boolean;
   saveWindowSize: boolean;
+  launchAtStartup: boolean;
+  startMinimizedToTray: boolean;
   localShortcuts: ShortcutConfig;
   globalShortcuts: ShortcutConfig;
   globalShortcutsEnabled: boolean;
@@ -41,6 +43,8 @@ const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
 const DEFAULT_SETTINGS: GlobalSettingsData = {
   minimizeToTray: false,
   saveWindowSize: false,
+  launchAtStartup: false,
+  startMinimizedToTray: false,
   localShortcuts: { ...DEFAULT_LOCAL_SHORTCUTS },
   globalShortcuts: { ...EMPTY_SHORTCUTS },
   globalShortcutsEnabled: false,
@@ -79,6 +83,14 @@ export default function GlobalSettings({ onClose }: Props) {
       invoke('set_minimize_to_tray', { enabled: settings.minimizeToTray });
     });
   }, [settings.minimizeToTray, isTauriEnv]);
+
+  // Apply launchAtStartup via autostart plugin
+  useEffect(() => {
+    if (!isTauriEnv) return;
+    import('@tauri-apps/plugin-autostart').then(({ enable, disable }) => {
+      if (settings.launchAtStartup) enable(); else disable();
+    });
+  }, [settings.launchAtStartup, isTauriEnv]);
 
   // Notify App when global shortcuts change
   useEffect(() => {
@@ -199,6 +211,38 @@ export default function GlobalSettings({ onClose }: Props) {
                 <span className={styles.toggleKnob} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Launch at startup */}
+        {isTauriEnv && (
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <span className={styles.toggleTitle}>开机自启动</span>
+                <span className={styles.toggleDesc}>系统登录时自动启动 ChillFocus</span>
+              </div>
+              <button
+                className={`${styles.toggle} ${settings.launchAtStartup ? styles.toggleOn : ''}`}
+                onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            </div>
+            {settings.launchAtStartup && (
+              <div className={styles.sectionHeader} style={{ marginTop: 10 }}>
+                <div>
+                  <span className={styles.toggleTitle} style={{ fontSize: 13, opacity: 0.8 }}>↳ 启动时隐藏到托盘</span>
+                  <span className={styles.toggleDesc}>自启动后不显示窗口，直接最小化到系统托盘</span>
+                </div>
+                <button
+                  className={`${styles.toggle} ${settings.startMinimizedToTray ? styles.toggleOn : ''}`}
+                  onClick={() => updateSetting('startMinimizedToTray', !settings.startMinimizedToTray)}
+                >
+                  <span className={styles.toggleKnob} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
