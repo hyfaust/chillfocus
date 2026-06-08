@@ -100,13 +100,18 @@ function App() {
     if (!isTauriEnv()) return;
     const WIN_KEY = 'chillfocus-window-geometry';
 
-    // Restore on mount
-    const restore = async () => {
+    const isSaveEnabled = () => {
       try {
-        const settingsRaw = localStorage.getItem('chillfocus-global-settings');
-        if (!settingsRaw) return;
-        const s = JSON.parse(settingsRaw);
-        if (!s.saveWindowSize) return;
+        const raw = localStorage.getItem('chillfocus-global-settings');
+        if (!raw) return false;
+        return JSON.parse(raw).saveWindowSize === true;
+      } catch { return false; }
+    };
+
+    // Restore on mount
+    (async () => {
+      try {
+        if (!isSaveEnabled()) return;
         const raw = localStorage.getItem(WIN_KEY);
         if (!raw) return;
         const geo = JSON.parse(raw);
@@ -115,41 +120,39 @@ function App() {
         if (geo.width && geo.height) await win.setSize(new LogicalSize(geo.width, geo.height));
         if (geo.x !== undefined && geo.y !== undefined) await win.setPosition(new LogicalPosition(geo.x, geo.y));
       } catch { /* ignore */ }
-    };
-    restore();
+    })();
 
-    // Save on close
-    const saveOnClose = async () => {
+    // Save geometry on resize/move (debounced)
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const saveGeometry = async () => {
+      if (!isSaveEnabled()) return;
       try {
-        const settingsRaw = localStorage.getItem('chillfocus-global-settings');
-        if (settingsRaw) {
-          const s = JSON.parse(settingsRaw);
-          if (!s.saveWindowSize) return;
-        } else return;
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
         const size = await win.outerSize();
         const pos = await win.outerPosition();
-        localStorage.setItem(WIN_KEY, JSON.stringify({
-          width: size.width, height: size.height,
-          x: pos.x, y: pos.y,
-        }));
+        localStorage.setItem(WIN_KEY, JSON.stringify({ width: size.width, height: size.height, x: pos.x, y: pos.y }));
       } catch { /* ignore */ }
     };
+    const debouncedSave = () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveGeometry, 500);
+    };
 
-    // Listen for window close event
-    let unlisten: (() => void) | null = null;
+    let unlisteners: (() => void)[] = [];
     (async () => {
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
-        unlisten = await win.onCloseRequested(async () => {
-          await saveOnClose();
-        });
+        unlisteners.push(await win.onResized(debouncedSave));
+        unlisteners.push(await win.onMoved(debouncedSave));
       } catch { /* ignore */ }
     })();
 
-    return () => { if (unlisten) unlisten(); };
+    return () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      unlisteners.forEach(fn => fn());
+    };
   }, []);
 
   // Local shortcuts — stable listener via refs

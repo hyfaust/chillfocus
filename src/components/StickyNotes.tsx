@@ -16,11 +16,11 @@ interface StickyNote {
 }
 
 const NOTE_COLORS = ['#ffd43b', '#ff8787', '#74c0fc', '#69db7c', '#da77f2', '#ffa94d'];
-const DEFAULT_W = 160;
-const DEFAULT_H = 100;
+const DEFAULT_W = 260;
+const DEFAULT_H = 160;
 const MIN_W = 80;
 const MIN_H = 60;
-const DEFAULT_FONT_SIZE = 12;
+const DEFAULT_FONT_SIZE = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 24;
 
