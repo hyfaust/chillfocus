@@ -58,7 +58,7 @@ export function usePomodoro() {
           const s = settingsRef.current;
           const isFocusEnd = prev.phase === 'focus';
           const soundSrc = isFocusEnd
-            ? (s.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`)
+            ? (s.notificationSound || `${import.meta.env.BASE_URL}sounds/focus-end.ogg`)
             : (s.breakNotificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
           try {
             if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }

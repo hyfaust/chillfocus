@@ -234,8 +234,14 @@ function App() {
           try {
             const { getCurrentWindow } = await import('@tauri-apps/api/window');
             const win = getCurrentWindow();
-            await win.show();
-            await win.setFocus();
+            const visible = await win.isVisible();
+            const minimized = await win.isMinimized();
+            if (visible && !minimized) {
+              await win.hide();
+            } else {
+              await win.show();
+              await win.setFocus();
+            }
           } catch { /* ignore */ }
         },
       };

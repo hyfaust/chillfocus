@@ -127,7 +127,7 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
                 <button className={styles.clearBtn} onClick={() => onUpdate({ notificationSound: '' })}>清除</button>
               )}
               <button className={styles.previewBtn} onClick={() => {
-                const a = new Audio(settings.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+                const a = new Audio(settings.notificationSound || `${import.meta.env.BASE_URL}sounds/focus-end.ogg`);
                 a.volume = 0.6;
                 a.play().catch(() => {});
               }}>▶ 试听</button>
