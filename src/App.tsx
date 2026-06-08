@@ -93,9 +93,12 @@ function App() {
         const s = JSON.parse(raw);
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('set_minimize_to_tray', { enabled: !!s.minimizeToTray });
-        if (s.startMinimizedToTray) {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
-          await getCurrentWindow().hide();
+        if (s.startMinimizedToTray && s.launchAtStartup) {
+          const isAutoStart: boolean = await invoke('is_autostart_launch');
+          if (isAutoStart) {
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+            await getCurrentWindow().hide();
+          }
         }
       } catch { /* ignore */ }
     })();

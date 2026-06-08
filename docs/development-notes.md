@@ -275,7 +275,23 @@ Rust 侧 `on_window_event` 监听 `CloseRequested`，根据 `AppState.minimize_t
 
 ### 7.4 开机自启动
 
-使用 `tauri-plugin-autostart` 插件，通过 `enable()`/`disable()` 控制 Windows 注册表 Run 键。子设置「启动时隐藏到托盘」在 App 启动时读取 localStorage 并调用 `getCurrentWindow().hide()`。
+使用 `tauri-plugin-autostart` 插件，通过 `enable()`/`disable()` 控制 Windows 注册表 Run 键。
+
+**启动时隐藏到托盘的区分问题**：子设置「启动时隐藏到托盘」需要只在开机自启动时生效，手动启动不应隐藏。
+
+**解决方案**：启用自启动时，通过 Rust 命令 `set_autostart_flag` 在注册表 Run 键的值末尾追加 `--autostart` 参数。启动时调用 `is_autostart_launch()` 检查 `std::env::args()` 是否包含该参数。
+
+```
+注册表 Run 键值：
+  启用前：C:\...\ChillFocus.exe
+  启用后：C:\...\ChillFocus.exe --autostart
+
+启动判断逻辑：
+  startMinimizedToTray && launchAtStartup && isAutoStart → hide()
+  手动启动（无 --autostart）→ 正常显示
+```
+
+禁用自启动时，`set_autostart_flag` 移除 `--autostart` 参数，同时 `disable()` 移除 Run 键。
 
 ---
 

@@ -319,6 +319,7 @@ interface Task {
 | 最小化到托盘 | 前端启动时从 localStorage 读取，调用 `invoke('set_minimize_to_tray')` 同步到 Rust 侧 `AtomicBool` |
 | 全局快捷键 | `ShortcutConfig` 定义 6 个动作（含显示/隐藏切换）；`convertToTauriShortcut()` 转换键名格式；`dispatchEvent('chillfocus-shortcuts-changed')` 通知 App 层重新注册；`showWindow` 通过 `isVisible`/`isMinimized`/`unminimize` 实现三态切换 |
 | 窗口记忆 | 监听 `onResized`/`onMoved` 防抖保存 `innerSize`/`outerPosition` 到 localStorage；启动时用 `LogicalSize`/`LogicalPosition` 恢复 |
+| 开机自启动 | `tauri-plugin-autostart` 管理注册表 Run 键；`set_autostart_flag` 命令追加/移除 `--autostart` 参数；`is_autostart_launch` 检查启动来源；仅自启动时隐藏到托盘 |
 
 ---
 

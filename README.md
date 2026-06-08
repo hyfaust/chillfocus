@@ -101,6 +101,11 @@
 - Prevents multiple windows when launching the app again
 - Second launch brings the existing window to the foreground
 
+#### Auto-start & Start Hidden
+- Optionally launch ChillFocus on system login
+- Sub-setting: start minimized to tray (only on autostart launch, not manual launch)
+- Uses `--autostart` flag appended to registry Run key to distinguish autostart from manual launch
+
 #### Responsive Layout
 - Fluid grid layout with breakpoints at 1024px and 768px
 - Task list and music player scale proportionally with window width

@@ -110,7 +110,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit])
+        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -130,4 +130,31 @@ fn set_minimize_to_tray(state: tauri::State<AppState>, enabled: bool) {
 #[tauri::command]
 fn force_quit(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+#[tauri::command]
+fn set_autostart_flag(enable: bool) {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey_with_flags(r"Software\Microsoft\Windows\CurrentVersion\Run", KEY_READ | KEY_WRITE) {
+        let app_name = "ChillFocus";
+        if enable {
+            if let Ok(val) = key.get_value::<String, _>(app_name) {
+                if !val.contains("--autostart") {
+                    let _ = key.set_value(app_name, &format!("{} --autostart", val));
+                }
+            }
+        } else {
+            if let Ok(val) = key.get_value::<String, _>(app_name) {
+                let cleaned = val.replace(" --autostart", "").replace("--autostart", "");
+                let _ = key.set_value(app_name, &cleaned);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn is_autostart_launch() -> bool {
+    std::env::args().any(|arg| arg == "--autostart")
 }

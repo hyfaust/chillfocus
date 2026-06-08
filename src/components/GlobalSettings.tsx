@@ -88,7 +88,13 @@ export default function GlobalSettings({ onClose }: Props) {
   useEffect(() => {
     if (!isTauriEnv) return;
     import('@tauri-apps/plugin-autostart').then(({ enable, disable }) => {
-      if (settings.launchAtStartup) enable(); else disable();
+      if (settings.launchAtStartup) {
+        enable();
+        import('@tauri-apps/api/core').then(({ invoke }) => invoke('set_autostart_flag', { enable: true }));
+      } else {
+        disable();
+        import('@tauri-apps/api/core').then(({ invoke }) => invoke('set_autostart_flag', { enable: false }));
+      }
     });
   }, [settings.launchAtStartup, isTauriEnv]);
 
