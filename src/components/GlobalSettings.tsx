@@ -9,6 +9,7 @@ export interface ShortcutConfig {
   nextTrack: string;
   volumeUp: string;
   volumeDown: string;
+  showWindow: string;
 }
 
 export interface GlobalSettingsData {
@@ -126,6 +127,7 @@ export default function GlobalSettings({ onClose }: Props) {
     nextTrack: '下一首',
     volumeUp: '增大音量',
     volumeDown: '减小音量',
+    showWindow: '显示主界面',
   };
 
   const renderShortcutRow = (action: string, label: string, scope: 'local' | 'global', combo: string) => {

@@ -24,6 +24,7 @@ export interface PomodoroSettings {
   longBreakDuration: number;
   roundsBeforeLongBreak: number;
   notificationSound: string;
+  breakNotificationSound: string;
   backgroundImage: string;
   autoLoop: boolean;
   hideTimeDisplay: boolean;

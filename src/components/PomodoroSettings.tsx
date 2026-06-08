@@ -11,7 +11,8 @@ interface Props {
 
 export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: Props) {
   const imgInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
+  const focusAudioRef = useRef<HTMLInputElement>(null);
+  const breakAudioRef = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
 
   const handleBgImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,12 +23,12 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
     if (imgInputRef.current) imgInputRef.current.value = '';
   };
 
-  const handleNotifSoundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNotifSoundUpload = (key: 'notificationSound' | 'breakNotificationSound', ref: React.RefObject<HTMLInputElement | null>) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    onUpdate({ notificationSound: url });
-    if (audioInputRef.current) audioInputRef.current.value = '';
+    onUpdate({ [key]: url });
+    if (ref.current) ref.current.value = '';
   };
 
   const minutes = (seconds: number) => Math.floor(seconds / 60);
@@ -117,15 +118,15 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
           </div>
 
           <div className={styles.section}>
-            <label className={styles.label}>阶段提示音</label>
+            <label className={styles.label}>专注结束提示音</label>
             <div className={styles.fileRow}>
-              <button className={styles.fileBtn} onClick={() => audioInputRef.current?.click()}>
+              <button className={styles.fileBtn} onClick={() => focusAudioRef.current?.click()}>
                 {settings.notificationSound ? '更换提示音' : '选择音频文件'}
               </button>
               {settings.notificationSound && (
                 <button className={styles.clearBtn} onClick={() => onUpdate({ notificationSound: '' })}>清除</button>
               )}
-              <input ref={audioInputRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleNotifSoundUpload} />
+              <input ref={focusAudioRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleNotifSoundUpload('notificationSound', focusAudioRef)} />
             </div>
             <span className={styles.hint}>
               {settings.notificationSound ? '已自定义' : '使用默认提示音'}
@@ -133,6 +134,29 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
             {settings.notificationSound && (
               <button className={styles.previewBtn} onClick={() => {
                 const a = new Audio(settings.notificationSound);
+                a.volume = 0.6;
+                a.play().catch(() => {});
+              }}>▶ 试听</button>
+            )}
+          </div>
+
+          <div className={styles.section}>
+            <label className={styles.label}>休息结束提示音</label>
+            <div className={styles.fileRow}>
+              <button className={styles.fileBtn} onClick={() => breakAudioRef.current?.click()}>
+                {settings.breakNotificationSound ? '更换提示音' : '选择音频文件'}
+              </button>
+              {settings.breakNotificationSound && (
+                <button className={styles.clearBtn} onClick={() => onUpdate({ breakNotificationSound: '' })}>清除</button>
+              )}
+              <input ref={breakAudioRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleNotifSoundUpload('breakNotificationSound', breakAudioRef)} />
+            </div>
+            <span className={styles.hint}>
+              {settings.breakNotificationSound ? '已自定义' : '使用默认提示音'}
+            </span>
+            {settings.breakNotificationSound && (
+              <button className={styles.previewBtn} onClick={() => {
+                const a = new Audio(settings.breakNotificationSound);
                 a.volume = 0.6;
                 a.play().catch(() => {});
               }}>▶ 试听</button>

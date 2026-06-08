@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: PomodoroSettings = {
   longBreakDuration: 15 * 60,
   roundsBeforeLongBreak: 4,
   notificationSound: '',
+  breakNotificationSound: '',
   backgroundImage: '',
   autoLoop: false,
   hideTimeDisplay: false,
@@ -53,25 +54,19 @@ export function usePomodoro() {
 
       setState(prev => {
         if (prev.timeLeft <= 1) {
-          // Play notification
+          // Play notification — different sound for focus vs break
           const s = settingsRef.current;
-          if (s.notificationSound) {
-            try {
-              if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
-              const audio = new Audio(s.notificationSound);
-              audio.volume = 0.6;
-              audio.play().catch(() => {});
-              notifAudioRef.current = audio;
-            } catch { /* ignore */ }
-          } else {
-            try {
-              if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
-              const audio = new Audio(`${import.meta.env.BASE_URL}sounds/notification.mp3`);
-              audio.volume = 0.6;
-              audio.play().catch(() => {});
-              notifAudioRef.current = audio;
-            } catch { /* ignore */ }
-          }
+          const isFocusEnd = prev.phase === 'focus';
+          const soundSrc = isFocusEnd
+            ? (s.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`)
+            : (s.breakNotificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+          try {
+            if (notifAudioRef.current) { notifAudioRef.current.pause(); notifAudioRef.current.currentTime = 0; }
+            const audio = new Audio(soundSrc);
+            audio.volume = 0.6;
+            audio.play().catch(() => {});
+            notifAudioRef.current = audio;
+          } catch { /* ignore */ }
 
           // Next phase
           let nextP: TimerPhase;

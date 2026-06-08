@@ -23,8 +23,8 @@ function loadShortcuts(): { local: ShortcutConfig; global: ShortcutConfig; globa
 }
 
 const isTauriEnv = () => !!(window as any).__TAURI_INTERNALS__;
-const EMPTY_SHORTCUTS: ShortcutConfig = { togglePomodoro: '', toggleMusic: '', nextTrack: '', volumeUp: '', volumeDown: '' };
-const DEFAULT_LOCAL: ShortcutConfig = { togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', volumeUp: 'ArrowUp', volumeDown: 'ArrowDown' };
+const EMPTY_SHORTCUTS: ShortcutConfig = { togglePomodoro: '', toggleMusic: '', nextTrack: '', volumeUp: '', volumeDown: '', showWindow: '' };
+const DEFAULT_LOCAL: ShortcutConfig = { togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', volumeUp: 'ArrowUp', volumeDown: 'ArrowDown', showWindow: '' };
 
 function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
   if (!combo) return false;
@@ -144,6 +144,14 @@ function App() {
         nextTrack: () => { ensureAnalyser(); playerRef.current.next(); },
         volumeUp: () => { playerRef.current.setVolume(Math.min(1, playerRef.current.volume + 0.1)); },
         volumeDown: () => { playerRef.current.setVolume(Math.max(0, playerRef.current.volume - 0.1)); },
+        showWindow: async () => {
+          try {
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+            const win = getCurrentWindow();
+            await win.show();
+            await win.setFocus();
+          } catch { /* ignore */ }
+        },
       };
 
       for (const [action, combo] of Object.entries(shortcuts)) {

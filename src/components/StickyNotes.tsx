@@ -12,6 +12,7 @@ interface StickyNote {
   h: number;
   color: string;
   pinned: boolean;
+  fontSize: number;
   createdAt: number;
 }
 
@@ -20,6 +21,9 @@ const DEFAULT_W = 160;
 const DEFAULT_H = 100;
 const MIN_W = 80;
 const MIN_H = 60;
+const DEFAULT_FONT_SIZE = 12;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 24;
 
 export default function StickyNotes() {
   const [notes, setNotes] = useLocalStorage<StickyNote[]>('chillfocus-notes', []);
@@ -38,6 +42,7 @@ export default function StickyNotes() {
       h: DEFAULT_H,
       color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
       pinned: false,
+      fontSize: DEFAULT_FONT_SIZE,
       createdAt: Date.now(),
     };
     setNotes(prev => [...prev, note]);
@@ -68,6 +73,14 @@ export default function StickyNotes() {
       if (n.id !== id) return n;
       const idx = NOTE_COLORS.indexOf(n.color);
       return { ...n, color: NOTE_COLORS[(idx + 1) % NOTE_COLORS.length] };
+    }));
+  }, [setNotes]);
+
+  const changeFontSize = useCallback((id: string, delta: number) => {
+    setNotes(prev => prev.map(n => {
+      if (n.id !== id) return n;
+      const size = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, (n.fontSize || DEFAULT_FONT_SIZE) + delta));
+      return { ...n, fontSize: size };
     }));
   }, [setNotes]);
 
@@ -183,6 +196,20 @@ export default function StickyNotes() {
           title="换色"
           style={{ backgroundColor: note.color }}
         />
+        <div className={styles.fontControls}>
+          <button
+            className={styles.fontBtn}
+            onClick={() => changeFontSize(note.id, -1)}
+            title="缩小字体"
+            disabled={(note.fontSize || DEFAULT_FONT_SIZE) <= MIN_FONT_SIZE}
+          >A-</button>
+          <button
+            className={styles.fontBtn}
+            onClick={() => changeFontSize(note.id, 1)}
+            title="放大字体"
+            disabled={(note.fontSize || DEFAULT_FONT_SIZE) >= MAX_FONT_SIZE}
+          >A+</button>
+        </div>
         <button
           className={`${styles.notePinBtn} ${note.pinned ? styles.notePinBtnActive : ''}`}
           onClick={() => togglePin(note.id)}
@@ -206,11 +233,13 @@ export default function StickyNotes() {
           onKeyDown={e => { if (e.key === 'Escape') updateNoteText(note.id, editText); }}
           autoFocus
           placeholder="写点什么..."
+          style={{ fontSize: note.fontSize || DEFAULT_FONT_SIZE }}
         />
       ) : (
         <div
           className={styles.noteText}
           onClick={() => { setEditingId(note.id); setEditText(note.text); }}
+          style={{ fontSize: note.fontSize || DEFAULT_FONT_SIZE }}
         >
           {note.text || '点击编辑...'}
         </div>
