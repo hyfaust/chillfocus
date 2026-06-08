@@ -83,6 +83,19 @@ function App() {
     return () => document.removeEventListener('click', handleClick);
   }, [ensureAnalyser]);
 
+  // Sync minimizeToTray setting to Rust on mount
+  useEffect(() => {
+    if (!isTauriEnv()) return;
+    try {
+      const raw = localStorage.getItem('chillfocus-global-settings');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('set_minimize_to_tray', { enabled: !!s.minimizeToTray });
+      });
+    } catch { /* ignore */ }
+  }, []);
+
   // Tray toggle functions (stable via refs)
   useEffect(() => {
     (window as any).__togglePomodoro = () => {

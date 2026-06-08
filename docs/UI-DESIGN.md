@@ -645,17 +645,10 @@ transition: all 0.2s ease;
 
 ```
 notesLayer (position: fixed, pointer-events: none)
-└── note (pointer-events: auto)     ← 浮动便签，viewport 定位
-
-pinnedLayer (position: absolute, pointer-events: none)
-└── note (pointer-events: auto)     ← 固定便签，page 定位
+└── note (pointer-events: auto)     ← 便签，viewport 定位
 ```
 
-两层分离渲染：
-- **Floating 层**：`position: fixed`，便签不随页面滚动
-- **Pinned 层**：`position: absolute`，便签随页面滚动
-
-两层均设置 `pointer-events: none` 确保不阻挡页面其他交互，单个便签 `pointer-events: auto` 恢复交互能力。
+单层渲染，所有便签使用 `position: fixed`，通过 CSS `z-index` 控制堆叠顺序。层设置 `pointer-events: none` 确保不阻挡页面其他交互，单个便签 `pointer-events: auto` 恢复交互能力。
 
 ### 13.2 便签卡片
 
@@ -676,24 +669,26 @@ pinnedLayer (position: absolute, pointer-events: none)
 
 ### 13.3 操作按钮
 
-便签操作区包含三个按钮：
+便签操作区包含按钮：
 - **换色**：`14px` 彩色圆形，点击循环切换 6 种颜色
-- **固定**：📌 emoji 按钮，切换浮动/固定状态
+- **字体调节**：`A-` / `A+` 按钮，8–24px 范围，每个便签独立持久化
 - **删除**：× 按钮，hover 时变红（`#ff6b6b`）
 
-三个按钮使用 **渐进式披露**：默认 `opacity: 0`，悬停便签时 `opacity: 1`。
+按钮使用 **渐进式披露**：默认 `opacity: 0`，悬停便签时 `opacity: 1`。
+
+文本编辑使用受控 `<textarea>`（`value` + `onChange`），内容超出容器高度时 `overflow-y: auto` 自动出现滚动条。
 
 ### 13.4 拖拽机制
 
 便签拖拽使用 **mousedown + mousemove** 原生事件实现，而非 HTML5 Drag API，确保 Tauri WebView 兼容性。
 
 - **便签拖拽**：`handleNoteMouseDown` 在 `document` 上注册 `mousemove`/`mouseup` 监听器，实时更新便签坐标
-- **图标拖拽创建**：从浮动图标拖出时显示 **拖拽预览方框**（160×100px，紫色虚线边框 + 半透明紫色背景），释放后在该位置创建新便签
+- **图标拖拽创建**：从浮动图标拖出时显示 **拖拽预览方框**（260×160px，紫色虚线边框 + 半透明紫色背景），释放后在该位置创建新便签
 
 ```css
 .dragPreview {
-  width: 160px;
-  height: 100px;
+  width: 260px;
+  height: 160px;
   border: 2px dashed rgba(124, 93, 250, 0.5);
   background: rgba(124, 93, 250, 0.2);
   animation: dragPulse 1s ease-in-out infinite;
@@ -796,8 +791,10 @@ z-index   元素                   语义
 
 | 断点 | 变化 |
 |------|------|
-| `> 768px` | 双栏 Grid 布局，面板 max-height 640px |
+| `> 1024px` | 双栏 Grid 布局（任务面板 240–320px + 音乐面板 1fr） |
+| `≤ 1024px` | 任务面板缩小至 220–280px |
 | `≤ 768px` | 单列布局，面板移除 max-height，页面 padding 缩小 |
-| 番茄钟 | 容器高度 320px → 280px，进度环 200px → 160px，时间字号 36px → 28px |
+| 番茄钟 | 所有元素使用 `clamp()` 响应式缩放（进度环 140–200px、主按钮 44–56px、时间字体 24–36px） |
+| 便签 | 默认 260×160px，字体 14px，容器支持任意拖拽缩放 |
 
-响应式采用 **Desktop-first** 策略，使用 `max-width` 断点适配小屏。
+响应式采用 **Desktop-first** 策略。Tauri 窗口最小尺寸 800×650，番茄钟和面板元素通过 `clamp()` + `vw/vh` 单位实现流式缩放，无需依赖媒体查询断点。

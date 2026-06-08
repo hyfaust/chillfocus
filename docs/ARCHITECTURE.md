@@ -5,7 +5,7 @@
 ChillFocus 是一款专注力助手应用，采用现代简约 / Lo-fi 风格，同时支持 **Web 端**和 **Tauri 桌面端**。核心功能包括番茄钟、音乐播放器、环境音、任务管理和便签。
 
 - **Web 端**：`npm run dev` → `http://localhost:5173/`
-- **桌面端**：`npx tauri dev` → 原生窗口（1200×800）
+- **桌面端**：`npx tauri dev` → 原生窗口（1368×912）
 
 ---
 
@@ -21,7 +21,7 @@ ChillFocus 是一款专注力助手应用，采用现代简约 / Lo-fi 风格，
 | 存储 | localStorage | 轻量元数据持久化 |
 | 存储 | IndexedDB | 音频文件二进制持久化 |
 | 桌面 | Tauri v2 | Rust 后端 + 系统 WebView |
-| Tauri 插件 | dialog, fs, shell, log | 原生文件对话框、文件读取、外链跳转、日志 |
+| Tauri 插件 | dialog, fs, shell, log, global-shortcut, single-instance | 原生对话框、文件读取、外链跳转、日志、全局快捷键、单实例 |
 
 ---
 
@@ -76,12 +76,13 @@ chillfocus/
 │       ├── MusicPlayer.tsx        # 音乐播放器（多列表 + 控制）
 │       ├── AmbientSounds.tsx      # 环境音面板
 │       ├── TaskManager.tsx        # 任务管理面板
-│       └── StickyNotes.tsx        # 浮动便签系统（双层渲染）
+│       ├── StickyNotes.tsx        # 浮动便签系统（字体可调、可滚动）
+│       └── GlobalSettings.tsx     # 全局设置（托盘、快捷键、窗口记忆）
 └── src-tauri/
     ├── Cargo.toml               # Rust 依赖
-    ├── tauri.conf.json           # Tauri 配置（1200×800 窗口）
+    ├── tauri.conf.json           # Tauri 配置（1368×912 窗口）
     ├── capabilities/
-    │   └── default.json          # 权限：dialog, fs:read-all, fs:scope-home-recursive, shell
+    │   └── default.json          # 权限：dialog, fs, shell, global-shortcut, window API
     ├── src/
     │   └── lib.rs                # 注册 Tauri 插件
     └── icons/                    # 应用图标
@@ -292,19 +293,31 @@ interface Task {
 
 ### 6. 便签系统（StickyNotes）
 
-**双层渲染**：
-- **浮动层**（`position: fixed`）：不随页面滚动
-- **固定层**（`position: absolute`）：随页面滚动
-
-📌 按钮切换状态：浮动 → 固定时坐标从 viewport 转 page，反之亦然。
+**单层渲染**：所有便签使用 `position: fixed`，通过 `z-index` 控制堆叠顺序。
 
 **交互**：
 - 拖拽创建、拖拽移动
 - 自定义 resize 手柄（宽高均可），使用 `mousedown` / `mousemove`（非 HTML5 Drag API，兼容 Tauri WebView）
 - `pointer-events: none` 不阻挡页面交互
 - 颜色循环、显隐切换
+- 字体大小调节（A-/A+ 按钮，8–24px）
+- 内容超出容器高度时 `overflow-y: auto` 自动出现滚动条
 
-**持久化**：`x, y, w, h, text, color, pinned` 全部存储在 localStorage。
+**文本编辑**：使用受控 `<textarea>`（`value={note.text}` + `onChange`），每次按键即时更新 state 并持久化，彻底避免 resize 后文字丢失的闭包陷阱。
+
+**持久化**：`x, y, w, h, text, color, fontSize` 全部存储在 localStorage。
+
+---
+
+### 7. 全局设置（GlobalSettings）
+
+管理桌面端专属功能的配置：
+
+| 功能 | 实现 |
+|------|------|
+| 最小化到托盘 | 前端启动时从 localStorage 读取，调用 `invoke('set_minimize_to_tray')` 同步到 Rust 侧 `AtomicBool` |
+| 全局快捷键 | `ShortcutConfig` 定义 6 个动作；`convertToTauriShortcut()` 转换键名格式；`dispatchEvent('chillfocus-shortcuts-changed')` 通知 App 层重新注册 |
+| 窗口记忆 | 监听 `onResized`/`onMoved` 防抖保存 `innerSize`/`outerPosition` 到 localStorage；启动时用 `LogicalSize`/`LogicalPosition` 恢复 |
 
 ---
 
@@ -329,8 +342,9 @@ interface PomodoroSettings {
   shortBreakDuration: number;
   longBreakDuration: number;
   roundsBeforeLongBreak: number;
-  notificationSound: string;   // data URL 或空（使用默认）
-  backgroundImage: string;     // data URL 或空
+  notificationSound: string;       // 专注结束提示音（URL 或空=默认）
+  breakNotificationSound: string;  // 休息结束提示音（URL 或空=默认）
+  backgroundImage: string;         // data URL 或空
   autoLoop: boolean;
   hideTimeDisplay: boolean;
   hideVisualization: boolean;
@@ -359,6 +373,8 @@ interface PomodoroSettings {
 | 自定义环境音 | localStorage | `chillfocus-custom-sounds` |
 | 环境音音量 | localStorage | `chillfocus-ambient-volumes` |
 | 活跃环境音 | localStorage | `chillfocus-ambient-active` |
+| 全局设置 | localStorage | `chillfocus-global-settings` |
+| 窗口几何 | localStorage | `chillfocus-window-geometry` |
 | 音频文件二进制 | IndexedDB | `chillfocus-audio` / `files` |
 
 ---

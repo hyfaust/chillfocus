@@ -383,3 +383,180 @@ register("Ctrl+space", handler) → 仅 event.state === 'Pressed' 时执行
 - 容器：加 `overflow-x: hidden`
 - 文本截断：`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
 - 弹性宽度：`flex: 1; min-width: 0` 代替固定 `max-width`
+
+---
+
+## 第九阶段：便签文字保存与 Resize
+
+### 问题：Resize 后文字丢失
+
+**现象**：便签中输入的文字在拖拽缩放容器后丢失，退回编辑前的状态。
+
+**根因**：使用非受控 `<textarea>`（`defaultValue` + `onBlur` 读取 `e.target.value`）。当 `updateNoteSize` 触发 `setNotes` 导致重渲染时，React 的协调器可能重建 textarea DOM 元素，`defaultValue` 重置为旧的 `note.text`，用户输入丢失。
+
+**修复**：改为受控 `<textarea>`（`value={note.text}` + `onChange` 即时更新 state）：
+
+```tsx
+<textarea
+  value={note.text}
+  onChange={(e) => updateNoteText(note.id, e.target.value)}
+  onBlur={() => setEditingId(null)}
+/>
+```
+
+每次按键都通过 `updateNoteText` 将文本写入 state（进而写入 localStorage），`onBlur` 仅负责退出编辑模式。无论 resize 触发多少次重渲染，textarea 的值始终与 state 同步。
+
+**教训**：
+> **当表单元素所在容器可能被外部操作频繁重渲染时，使用受控组件（`value` + `onChange`）而非非受控组件（`defaultValue` + `onBlur`）。受控组件的值始终与 state 同步，不会因 DOM 重建而丢失。**
+
+---
+
+## 第十阶段：Tauri 窗口 API 权限（ACL）
+
+### 问题：`set_size` / `set_position` 命令被拒绝
+
+**现象**：调用 `win.setSize()` 和 `win.setPosition()` 时报错 `Command plugin:window|set_size not allowed by ACL`。
+
+**根因**：Tauri v2 的权限模型要求每个窗口 API 都需要在 `capabilities/default.json` 中显式声明。
+
+**修复**：添加以下权限：
+
+```json
+"core:window:allow-set-size",
+"core:window:allow-set-position",
+"core:window:allow-outer-size",
+"core:window:allow-outer-position",
+"core:window:allow-scale-factor",
+"core:window:allow-inner-size",
+"core:window:allow-inner-position"
+```
+
+**教训**：
+> **Tauri v2 的每个 IPC 命令都需要在 capabilities 中显式授权。使用新的 Tauri API 时，如果遇到 `not allowed by ACL` 错误，检查 `capabilities/default.json` 是否包含对应的 `allow-*` 权限。**
+
+---
+
+## 第十一阶段：窗口持久化
+
+### 问题 1：窗口每次恢复后变大
+
+**现象**：保存窗口大小 → 关闭 → 重启 → 窗口变大 → 再关闭 → 再重启 → 更大，逐次膨胀。
+
+**根因**：`outerSize()` 返回的尺寸**包含窗口标题栏和装饰**，但 `setSize()` 设置的是**内含尺寸**（不含装饰）。每次保存 outerSize → 恢复 setSize，标题栏高度被累加。
+
+**修复**：保存时使用 `innerSize()`（内含尺寸），与 `setSize()` 对齐：
+
+```typescript
+const size = await win.innerSize();   // 不含标题栏
+const pos = await win.outerPosition(); // 位置用 outer
+```
+
+### 问题 2：恢复后立即覆盖保存数据
+
+**现象**：恢复窗口大小后，`onResized` 事件触发，debounce 500ms 后将恢复后的尺寸写入 localStorage，覆盖了原始保存数据。
+
+**修复**：添加 `restoring` 标志位，恢复期间跳过保存：
+
+```typescript
+let restoring = false;
+// Restore:
+restoring = true;
+await win.setSize(...);
+await win.setPosition(...);
+setTimeout(() => { restoring = false; }, 1000);
+// Save:
+if (restoring) return; // 跳过
+```
+
+### 问题 3：物理像素 vs 逻辑像素
+
+**现象**：在 150% DPI 缩放下，保存的尺寸值是物理像素（如 2052×1449），恢复时用 `LogicalSize` 解释为逻辑像素，导致窗口尺寸错误。
+
+**修复**：保存时通过 `scaleFactor` 转换为逻辑像素：
+
+```typescript
+const factor = await win.scaleFactor();
+const w = Math.round(physSize.width / factor);
+const h = Math.round(physSize.height / factor);
+```
+
+**教训**：
+> **窗口持久化的完整检查清单：**
+> 1. **用 `innerSize()` 保存**，避免标题栏装饰累加
+> 2. **物理→逻辑转换**：`innerSize()` 返回物理像素，除以 `scaleFactor` 得到逻辑像素
+> 3. **防恢复覆盖**：添加 `restoring` 标志位，恢复期间跳过 save 回调
+> 4. **ACL 权限**：确保 `setSize`、`setPosition`、`innerSize`、`outerPosition`、`scaleFactor` 都已授权
+
+---
+
+## 第十二阶段：Tauri 最小化到托盘启动同步
+
+### 问题：最小化到托盘设置在启动后不生效
+
+**现象**：用户启用「关闭时最小化到托盘」后关闭应用，重启后点击关闭按钮，窗口直接关闭而非最小化。
+
+**根因**：Rust 侧的 `AppState.minimize_to_tray` 是 `AtomicBool`，默认 `false`。`set_minimize_to_tray` 命令只在 `GlobalSettings` 组件渲染时调用。应用启动时 GlobalSettings 未渲染，Rust 侧标志始终为 `false`。
+
+**修复**：在 `App.tsx` 的启动 `useEffect` 中，从 localStorage 读取设置并同步到 Rust 侧：
+
+```typescript
+useEffect(() => {
+  if (!isTauriEnv()) return;
+  const raw = localStorage.getItem('chillfocus-global-settings');
+  if (!raw) return;
+  const s = JSON.parse(raw);
+  import('@tauri-apps/api/core').then(({ invoke }) => {
+    invoke('set_minimize_to_tray', { enabled: !!s.minimizeToTray });
+  });
+}, []);
+```
+
+**教训**：
+> **前端 localStorage 设置与 Rust 侧状态不是自动同步的。任何通过 Tauri command 修改的 Rust 状态，都需要在应用启动时从 localStorage 重新同步。**
+
+---
+
+## 第十三阶段：Tauri 单实例
+
+### 实现
+
+使用 `tauri-plugin-single-instance` 插件，注册时提供回调：
+
+```rust
+.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}))
+```
+
+重复启动时自动将已有窗口显示到前台，不创建新窗口。
+
+**注意**：`tauri-plugin-single-instance` 在 Windows 上使用命名互斥锁（named mutex）实现。开发模式（`tauri dev`）和生产模式使用不同的互斥锁名称，不会互相干扰。
+
+---
+
+## 更新后的关键经验总结
+
+### 6. Tauri v2 ACL 权限清单
+
+使用新的 Tauri API 遇到 `not allowed by ACL` 时，在 `capabilities/default.json` 中添加对应权限。格式：`core:window:allow-<kebab-case-method-name>`。
+
+### 7. 受控 vs 非受控表单
+
+| 场景 | 推荐 |
+|------|------|
+| 容器可能被外部操作重渲染 | 受控（`value` + `onChange`） |
+| 表单提交时才需要值 | 非受控（`defaultValue` + `ref`） |
+| 需要即时验证/格式化 | 受控 |
+| 大量独立输入框、性能敏感 | 非受控 |
+
+### 8. 前端 ↔ Rust 状态同步
+
+```
+前端 localStorage ←→ Tauri command ←→ Rust State
+                         ↑
+                   启动时必须手动同步
+                   设置变更时必须调用 invoke
+```

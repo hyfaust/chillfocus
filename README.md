@@ -65,11 +65,16 @@
 ### Floating Sticky Notes
 - Drag the icon to any position on the page to create a note
 - Click the icon to toggle show/hide all notes
-- Pin/unpin notes — pinned notes scroll with the page, floating notes stay fixed
 - Resizable via custom corner handle (both width and height)
+- Adjustable font size (A-/A+ buttons, 8–24px), persisted per note
+- Content scrolls when it exceeds the note height
 - 6-color cycling palette
-- Dual-layer rendering: floating (fixed) and pinned (scrolls with page)
 - localStorage persistence
+
+### Pomodoro Timer (Desktop Enhancements)
+- Separate notification sounds for focus-end and break-end (each customizable)
+- Always-available preview button for both default and custom sounds
+- Responsive progress ring, controls, and fonts that scale with window size
 
 ### Desktop-Only Features (Tauri)
 
@@ -81,14 +86,24 @@
 
 #### Global Shortcuts
 - System-wide hotkeys that work when the app is in the background
-- Configurable per-action: toggle Pomodoro, toggle music, next track, volume up/down
+- Configurable per-action: toggle Pomodoro, toggle music, next track, volume up/down, show window
 - Enable/disable toggle in Settings
 - Auto-re-register when shortcuts are changed in Settings
 - Key format auto-conversion from web key names to Tauri's native format
 
+#### Window Persistence
+- Optionally remember window size and position across restarts
+- Toggle in Settings; geometry is saved on resize/move events
+- Uses inner content size to avoid title-bar inflation across sessions
+
+#### Single Instance
+- Prevents multiple windows when launching the app again
+- Second launch brings the existing window to the foreground
+
 #### Responsive Layout
 - Fluid grid layout with breakpoints at 1024px and 768px
 - Task list and music player scale proportionally with window width
+- Pomodoro timer uses `clamp()` for ring, buttons, and fonts
 - Single-column layout on narrow screens
 
 ## Installation
