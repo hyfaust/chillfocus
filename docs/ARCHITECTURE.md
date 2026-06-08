@@ -46,7 +46,8 @@ chillfocus/
 │       ├── fireplace.ogg         # 壁炉（ChillPulse）
 │       ├── forest.ogg            # 森林（ChillPulse）
 │       ├── wind.ogg              # 风声（ChillPulse）
-│       └── notification.mp3      # 默认阶段提示音
+│       ├── focus-end.ogg          # 专注结束提示音（Blue Rag）
+│       └── notification.mp3       # 休息结束提示音
 ├── src/
 │   ├── main.tsx                  # React 入口
 │   ├── App.tsx                   # 根组件，组合所有模块
@@ -148,7 +149,7 @@ resolveTrackUrl 优先级：
 
 **关键实现**：
 - **单一持久化 interval**：effect 内创建一次 `setInterval`，永不重建。通过 `isRunningRef` 和 `settingsRef` 检查最新状态，避免闭包陈旧值和 effect 重建竞态
-- **默认提示音**：使用 `/sounds/notification.mp3`，支持自定义上传
+- **默认提示音**：专注结束使用 `/sounds/focus-end.ogg`，休息结束使用 `/sounds/notification.mp3`，各自支持自定义上传
 - **autoLoop 模式**：阶段结束后 `isRunning` 保持 `true`，自动开始下一阶段
 - **hideTimeDisplay**：隐藏进度环、时间和轮数，内容靠顶部显示
 - **hideVisualization**：隐藏底部频谱动画
@@ -316,7 +317,7 @@ interface Task {
 | 功能 | 实现 |
 |------|------|
 | 最小化到托盘 | 前端启动时从 localStorage 读取，调用 `invoke('set_minimize_to_tray')` 同步到 Rust 侧 `AtomicBool` |
-| 全局快捷键 | `ShortcutConfig` 定义 6 个动作；`convertToTauriShortcut()` 转换键名格式；`dispatchEvent('chillfocus-shortcuts-changed')` 通知 App 层重新注册 |
+| 全局快捷键 | `ShortcutConfig` 定义 6 个动作（含显示/隐藏切换）；`convertToTauriShortcut()` 转换键名格式；`dispatchEvent('chillfocus-shortcuts-changed')` 通知 App 层重新注册；`showWindow` 通过 `isVisible`/`isMinimized`/`unminimize` 实现三态切换 |
 | 窗口记忆 | 监听 `onResized`/`onMoved` 防抖保存 `innerSize`/`outerPosition` 到 localStorage；启动时用 `LogicalSize`/`LogicalPosition` 恢复 |
 
 ---

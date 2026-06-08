@@ -20,6 +20,7 @@
     "core:window:allow-inner-position",
     "core:window:allow-is-visible",
     "core:window:allow-is-minimized",
+    "core:window:allow-unminimize",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",

@@ -236,7 +236,10 @@ function App() {
             const win = getCurrentWindow();
             const visible = await win.isVisible();
             const minimized = await win.isMinimized();
-            if (visible && !minimized) {
+            if (minimized) {
+              await win.unminimize();
+              await win.setFocus();
+            } else if (visible) {
               await win.hide();
             } else {
               await win.show();

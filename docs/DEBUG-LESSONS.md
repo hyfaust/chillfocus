@@ -560,3 +560,21 @@ useEffect(() => {
                    启动时必须手动同步
                    设置变更时必须调用 invoke
 ```
+
+### 9. Tauri 窗口状态 API 三态区分
+
+| 状态 | `isVisible()` | `isMinimized()` | 恢复方法 |
+|------|:---:|:---:|------|
+| 前台可见 | `true` | `false` | — （可执行 `hide()`） |
+| 托盘隐藏 | `false` | `false` | `show()` + `setFocus()` |
+| 最小化 | `true`* | `true` | `unminimize()` + `setFocus()` |
+
+*最小化时 `isVisible()` 的返回值取决于平台。
+
+**关键**：`show()` 只恢复被 `hide()` 隐藏的窗口，对最小化窗口无效。必须先调用 `unminimize()`。需要 ACL 权限 `core:window:allow-unminimize`。
+
+### 10. 默认音效文件管理
+
+项目内置音效存放在 `public/sounds/`，Vite 构建时自动复制到 `dist/sounds/`。代码中通过 `${import.meta.env.BASE_URL}sounds/xxx` 引用。
+
+替换默认音效时，直接替换文件并更新代码中的路径即可。用户自定义音效通过 blob URL 存储在 `settings.notificationSound`（localStorage），优先级高于默认文件。

@@ -86,7 +86,8 @@
 
 #### Global Shortcuts
 - System-wide hotkeys that work when the app is in the background
-- Configurable per-action: toggle Pomodoro, toggle music, next track, volume up/down, show window
+- Configurable per-action: toggle Pomodoro, toggle music, next track, volume up/down, show/hide window
+- Show/hide toggle: foreground → hide to tray; background/minimized/tray → restore to foreground
 - Enable/disable toggle in Settings
 - Auto-re-register when shortcuts are changed in Settings
 - Key format auto-conversion from web key names to Tauri's native format
