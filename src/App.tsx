@@ -115,10 +115,13 @@ function App() {
         const raw = localStorage.getItem(WIN_KEY);
         if (!raw) return;
         const geo = JSON.parse(raw);
+        if (!geo.w || !geo.h) return;
         const { getCurrentWindow, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
-        if (geo.width && geo.height) await win.setSize(new LogicalSize(geo.width, geo.height));
-        if (geo.x !== undefined && geo.y !== undefined) await win.setPosition(new LogicalPosition(geo.x, geo.y));
+        await win.setSize(new LogicalSize(geo.w, geo.h));
+        if (geo.x !== undefined && geo.y !== undefined) {
+          await win.setPosition(new LogicalPosition(geo.x, geo.y));
+        }
       } catch { /* ignore */ }
     })();
 
@@ -129,9 +132,15 @@ function App() {
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
-        const size = await win.outerSize();
-        const pos = await win.outerPosition();
-        localStorage.setItem(WIN_KEY, JSON.stringify({ width: size.width, height: size.height, x: pos.x, y: pos.y }));
+        const physSize = await win.outerSize();
+        const physPos = await win.outerPosition();
+        const factor = await win.scaleFactor();
+        localStorage.setItem(WIN_KEY, JSON.stringify({
+          w: Math.round(physSize.width / factor),
+          h: Math.round(physSize.height / factor),
+          x: Math.round(physPos.x / factor),
+          y: Math.round(physPos.y / factor),
+        }));
       } catch { /* ignore */ }
     };
     const debouncedSave = () => {

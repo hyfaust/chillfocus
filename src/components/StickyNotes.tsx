@@ -101,7 +101,7 @@ export default function StickyNotes() {
       document.removeEventListener('mouseup', onMouseUp);
       setDragPreview(null);
       if (moved) {
-        addNote(ev.clientX - 80, ev.clientY - 50);
+        addNote(ev.clientX - 130, ev.clientY - 80);
       } else if (notes.length > 0) {
         setVisible(v => !v);
       }
@@ -235,7 +235,7 @@ export default function StickyNotes() {
       {dragPreview && (
         <div
           className={styles.dragPreview}
-          style={{ left: dragPreview.x - 80, top: dragPreview.y - 50 }}
+          style={{ left: dragPreview.x - 130, top: dragPreview.y - 80 }}
         />
       )}
 
