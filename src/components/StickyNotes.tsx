@@ -11,7 +11,6 @@ interface StickyNote {
   w: number;
   h: number;
   color: string;
-  pinned: boolean;
   fontSize: number;
   createdAt: number;
 }
@@ -29,7 +28,6 @@ export default function StickyNotes() {
   const [notes, setNotes] = useLocalStorage<StickyNote[]>('chillfocus-notes', []);
   const [visible, setVisible] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
   const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
   const iconRef = useRef<HTMLDivElement>(null);
 
@@ -41,20 +39,21 @@ export default function StickyNotes() {
       w: DEFAULT_W,
       h: DEFAULT_H,
       color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
-      pinned: false,
       fontSize: DEFAULT_FONT_SIZE,
       createdAt: Date.now(),
     };
     setNotes(prev => [...prev, note]);
     setEditingId(note.id);
-    setEditText('');
     if (!visible) setVisible(true);
   }, [setNotes, visible]);
 
   const updateNoteText = useCallback((id: string, text: string) => {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
-    setEditingId(null);
   }, [setNotes]);
+
+  const saveAndExit = useCallback(() => {
+    setEditingId(null);
+  }, []);
 
   const updateNotePosition = useCallback((id: string, x: number, y: number) => {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, x, y } : n));
@@ -84,20 +83,6 @@ export default function StickyNotes() {
     }));
   }, [setNotes]);
 
-  const togglePin = useCallback((id: string) => {
-    setNotes(prev => prev.map(n => {
-      if (n.id !== id) return n;
-      if (!n.pinned) {
-        // floating → pinned: convert viewport coords to page coords
-        return { ...n, pinned: true, x: n.x + window.scrollX, y: n.y + window.scrollY };
-      } else {
-        // pinned → floating: convert page coords to viewport coords
-        return { ...n, pinned: false, x: n.x - window.scrollX, y: n.y - window.scrollY };
-      }
-    }));
-  }, [setNotes]);
-
-  // Icon drag via mouse events (more reliable in WebView)
   const handleIconMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -138,11 +123,7 @@ export default function StickyNotes() {
     const origY = note.y;
 
     const onMouseMove = (ev: MouseEvent) => {
-      if (note.pinned) {
-        updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
-      } else {
-        updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
-      }
+      updateNotePosition(noteId, origX + (ev.clientX - startX), origY + (ev.clientY - startY));
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -179,7 +160,7 @@ export default function StickyNotes() {
   const renderNote = (note: StickyNote) => (
     <div
       key={note.id}
-      className={`${styles.note} ${note.pinned ? styles.notePinned : ''}`}
+      className={styles.note}
       style={{
         left: note.x,
         top: note.y,
@@ -211,13 +192,6 @@ export default function StickyNotes() {
           >A+</button>
         </div>
         <button
-          className={`${styles.notePinBtn} ${note.pinned ? styles.notePinBtnActive : ''}`}
-          onClick={() => togglePin(note.id)}
-          title={note.pinned ? '取消固定' : '固定'}
-        >
-          📌
-        </button>
-        <button
           className={styles.noteDeleteBtn}
           onClick={() => deleteNote(note.id)}
           title="删除"
@@ -227,10 +201,10 @@ export default function StickyNotes() {
       {editingId === note.id ? (
         <textarea
           className={styles.noteTextarea}
-          value={editText}
-          onChange={e => setEditText(e.target.value)}
-          onBlur={() => updateNoteText(note.id, editText)}
-          onKeyDown={e => { if (e.key === 'Escape') updateNoteText(note.id, editText); }}
+          value={note.text}
+          onChange={(e) => updateNoteText(note.id, e.target.value)}
+          onBlur={() => saveAndExit()}
+          onKeyDown={(e) => { if (e.key === 'Escape') saveAndExit(); }}
           autoFocus
           placeholder="写点什么..."
           style={{ fontSize: note.fontSize || DEFAULT_FONT_SIZE }}
@@ -238,7 +212,7 @@ export default function StickyNotes() {
       ) : (
         <div
           className={styles.noteText}
-          onClick={() => { setEditingId(note.id); setEditText(note.text); }}
+          onClick={() => setEditingId(note.id)}
           style={{ fontSize: note.fontSize || DEFAULT_FONT_SIZE }}
         >
           {note.text || '点击编辑...'}
@@ -252,22 +226,12 @@ export default function StickyNotes() {
     </div>
   );
 
-  const floatingNotes = notes.filter(n => !n.pinned);
-  const pinnedNotes = notes.filter(n => n.pinned);
-
   return (
     <>
-      {/* Floating notes layer - fixed positioning */}
       <div className={`${styles.notesLayer} ${visible ? '' : styles.notesHidden}`}>
-        {floatingNotes.map(renderNote)}
+        {notes.map(renderNote)}
       </div>
 
-      {/* Pinned notes layer - absolute positioning, scrolls with page */}
-      <div className={`${styles.pinnedLayer} ${visible ? '' : styles.notesHidden}`}>
-        {pinnedNotes.map(renderNote)}
-      </div>
-
-      {/* Drag preview ghost */}
       {dragPreview && (
         <div
           className={styles.dragPreview}

@@ -95,6 +95,63 @@ function App() {
     };
   }, [ensureAnalyser]);
 
+  // Save/restore window size and position
+  useEffect(() => {
+    if (!isTauriEnv()) return;
+    const WIN_KEY = 'chillfocus-window-geometry';
+
+    // Restore on mount
+    const restore = async () => {
+      try {
+        const settingsRaw = localStorage.getItem('chillfocus-global-settings');
+        if (!settingsRaw) return;
+        const s = JSON.parse(settingsRaw);
+        if (!s.saveWindowSize) return;
+        const raw = localStorage.getItem(WIN_KEY);
+        if (!raw) return;
+        const geo = JSON.parse(raw);
+        const { getCurrentWindow, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        if (geo.width && geo.height) await win.setSize(new LogicalSize(geo.width, geo.height));
+        if (geo.x !== undefined && geo.y !== undefined) await win.setPosition(new LogicalPosition(geo.x, geo.y));
+      } catch { /* ignore */ }
+    };
+    restore();
+
+    // Save on close
+    const saveOnClose = async () => {
+      try {
+        const settingsRaw = localStorage.getItem('chillfocus-global-settings');
+        if (settingsRaw) {
+          const s = JSON.parse(settingsRaw);
+          if (!s.saveWindowSize) return;
+        } else return;
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        const size = await win.outerSize();
+        const pos = await win.outerPosition();
+        localStorage.setItem(WIN_KEY, JSON.stringify({
+          width: size.width, height: size.height,
+          x: pos.x, y: pos.y,
+        }));
+      } catch { /* ignore */ }
+    };
+
+    // Listen for window close event
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        unlisten = await win.onCloseRequested(async () => {
+          await saveOnClose();
+        });
+      } catch { /* ignore */ }
+    })();
+
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
   // Local shortcuts — stable listener via refs
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

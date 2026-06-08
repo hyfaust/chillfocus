@@ -14,6 +14,7 @@ export interface ShortcutConfig {
 
 export interface GlobalSettingsData {
   minimizeToTray: boolean;
+  saveWindowSize: boolean;
   localShortcuts: ShortcutConfig;
   globalShortcuts: ShortcutConfig;
   globalShortcutsEnabled: boolean;
@@ -39,6 +40,7 @@ const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
 
 const DEFAULT_SETTINGS: GlobalSettingsData = {
   minimizeToTray: false,
+  saveWindowSize: false,
   localShortcuts: { ...DEFAULT_LOCAL_SHORTCUTS },
   globalShortcuts: { ...EMPTY_SHORTCUTS },
   globalShortcutsEnabled: false,
@@ -175,6 +177,24 @@ export default function GlobalSettings({ onClose }: Props) {
               <button
                 className={`${styles.toggle} ${settings.minimizeToTray ? styles.toggleOn : ''}`}
                 onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Save window size */}
+        {isTauriEnv && (
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <span className={styles.toggleTitle}>记住窗口大小和位置</span>
+                <span className={styles.toggleDesc}>下次启动时恢复上次关闭时的窗口大小和位置</span>
+              </div>
+              <button
+                className={`${styles.toggle} ${settings.saveWindowSize ? styles.toggleOn : ''}`}
+                onClick={() => updateSetting('saveWindowSize', !settings.saveWindowSize)}
               >
                 <span className={styles.toggleKnob} />
               </button>

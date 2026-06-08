@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "ChillFocus",
-        "width": 1440,
-        "height": 900,
+        "width": 1368,
+        "height": 912,
         "minWidth": 800,
         "minHeight": 650,
         "resizable": true,
