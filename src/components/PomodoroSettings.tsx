@@ -131,13 +131,11 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
             <span className={styles.hint}>
               {settings.notificationSound ? '已自定义' : '使用默认提示音'}
             </span>
-            {settings.notificationSound && (
-              <button className={styles.previewBtn} onClick={() => {
-                const a = new Audio(settings.notificationSound);
-                a.volume = 0.6;
-                a.play().catch(() => {});
-              }}>▶ 试听</button>
-            )}
+            <button className={styles.previewBtn} onClick={() => {
+              const a = new Audio(settings.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+              a.volume = 0.6;
+              a.play().catch(() => {});
+            }}>▶ 试听</button>
           </div>
 
           <div className={styles.section}>
@@ -154,13 +152,11 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
             <span className={styles.hint}>
               {settings.breakNotificationSound ? '已自定义' : '使用默认提示音'}
             </span>
-            {settings.breakNotificationSound && (
-              <button className={styles.previewBtn} onClick={() => {
-                const a = new Audio(settings.breakNotificationSound);
-                a.volume = 0.6;
-                a.play().catch(() => {});
-              }}>▶ 试听</button>
-            )}
+            <button className={styles.previewBtn} onClick={() => {
+              const a = new Audio(settings.breakNotificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+              a.volume = 0.6;
+              a.play().catch(() => {});
+            }}>▶ 试听</button>
           </div>
 
           <div className={styles.section}>

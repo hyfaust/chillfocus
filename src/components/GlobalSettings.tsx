@@ -25,6 +25,7 @@ const EMPTY_SHORTCUTS: ShortcutConfig = {
   nextTrack: '',
   volumeUp: '',
   volumeDown: '',
+  showWindow: '',
 };
 
 const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
@@ -33,6 +34,7 @@ const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
   nextTrack: 'n',
   volumeUp: 'ArrowUp',
   volumeDown: 'ArrowDown',
+  showWindow: '',
 };
 
 const DEFAULT_SETTINGS: GlobalSettingsData = {

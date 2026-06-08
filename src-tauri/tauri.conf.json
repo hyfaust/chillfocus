@@ -14,9 +14,9 @@
       {
         "title": "ChillFocus",
         "width": 1200,
-        "height": 800,
+        "height": 850,
         "minWidth": 800,
-        "minHeight": 600,
+        "minHeight": 650,
         "resizable": true,
         "fullscreen": false,
         "center": true

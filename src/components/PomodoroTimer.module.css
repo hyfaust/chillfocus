@@ -2,7 +2,7 @@
   position: relative;
   border-radius: 20px;
   overflow: hidden;
-  height: clamp(240px, 35vh, 360px);
+  height: clamp(260px, 40vh, 400px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,8 +14,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 32px 24px 20px;
+  gap: clamp(8px, 1.5vw, 16px);
+  padding: clamp(16px, 3vw, 32px) clamp(12px, 2vw, 24px) clamp(10px, 2vh, 20px);
   width: 100%;
 }
 
@@ -27,7 +27,7 @@
 }
 
 .phaseLabel {
-  font-size: 14px;
+  font-size: clamp(11px, 1.5vw, 14px);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 3px;
@@ -36,10 +36,10 @@
 
 .settingsBtn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
+  top: clamp(8px, 1.5vw, 12px);
+  right: clamp(8px, 1.5vw, 12px);
+  width: clamp(26px, 3.5vw, 32px);
+  height: clamp(26px, 3.5vw, 32px);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.1);
@@ -60,8 +60,8 @@
 /* Progress Ring */
 .ringWrap {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: clamp(140px, 25vw, 200px);
+  height: clamp(140px, 25vw, 200px);
 }
 
 .ring {
@@ -90,7 +90,7 @@
 }
 
 .timeText {
-  font-size: 36px;
+  font-size: clamp(24px, 4vw, 36px);
   font-weight: 200;
   font-variant-numeric: tabular-nums;
   color: #fff;
@@ -100,7 +100,7 @@
 }
 
 .roundText {
-  font-size: 12px;
+  font-size: clamp(10px, 1.3vw, 12px);
   color: rgba(255, 255, 255, 0.5);
   font-weight: 400;
 }
@@ -112,13 +112,13 @@
 .controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: clamp(8px, 1.5vw, 16px);
   margin-top: -8px;
 }
 
 .btnPrimary {
-  width: 56px;
-  height: 56px;
+  width: clamp(44px, 6vw, 56px);
+  height: clamp(44px, 6vw, 56px);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.2);
@@ -141,8 +141,8 @@
 }
 
 .btnSecondary {
-  width: 40px;
-  height: 40px;
+  width: clamp(32px, 4.5vw, 40px);
+  height: clamp(32px, 4.5vw, 40px);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.1);
@@ -169,15 +169,15 @@
   pointer-events: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .ringWrap {
-    width: 160px;
-    height: 160px;
+    width: 120px;
+    height: 120px;
   }
   .timeText {
-    font-size: 28px;
+    font-size: 22px;
   }
   .container {
-    height: 240px;
+    height: 220px;
   }
 }
