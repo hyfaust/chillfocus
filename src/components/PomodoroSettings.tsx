@@ -126,16 +126,16 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
               {settings.notificationSound && (
                 <button className={styles.clearBtn} onClick={() => onUpdate({ notificationSound: '' })}>清除</button>
               )}
+              <button className={styles.previewBtn} onClick={() => {
+                const a = new Audio(settings.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+                a.volume = 0.6;
+                a.play().catch(() => {});
+              }}>▶ 试听</button>
               <input ref={focusAudioRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleNotifSoundUpload('notificationSound', focusAudioRef)} />
             </div>
             <span className={styles.hint}>
               {settings.notificationSound ? '已自定义' : '使用默认提示音'}
             </span>
-            <button className={styles.previewBtn} onClick={() => {
-              const a = new Audio(settings.notificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
-              a.volume = 0.6;
-              a.play().catch(() => {});
-            }}>▶ 试听</button>
           </div>
 
           <div className={styles.section}>
@@ -147,16 +147,16 @@ export default function PomodoroSettingsPanel({ settings, onUpdate, onClose }: P
               {settings.breakNotificationSound && (
                 <button className={styles.clearBtn} onClick={() => onUpdate({ breakNotificationSound: '' })}>清除</button>
               )}
+              <button className={styles.previewBtn} onClick={() => {
+                const a = new Audio(settings.breakNotificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
+                a.volume = 0.6;
+                a.play().catch(() => {});
+              }}>▶ 试听</button>
               <input ref={breakAudioRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleNotifSoundUpload('breakNotificationSound', breakAudioRef)} />
             </div>
             <span className={styles.hint}>
               {settings.breakNotificationSound ? '已自定义' : '使用默认提示音'}
             </span>
-            <button className={styles.previewBtn} onClick={() => {
-              const a = new Audio(settings.breakNotificationSound || `${import.meta.env.BASE_URL}sounds/notification.mp3`);
-              a.volume = 0.6;
-              a.play().catch(() => {});
-            }}>▶ 试听</button>
           </div>
 
           <div className={styles.section}>
