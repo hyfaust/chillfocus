@@ -99,6 +99,7 @@ function App() {
   useEffect(() => {
     if (!isTauriEnv()) return;
     const WIN_KEY = 'chillfocus-window-geometry';
+    let restoring = false;
 
     const isSaveEnabled = () => {
       try {
@@ -118,28 +119,31 @@ function App() {
         if (!geo.w || !geo.h) return;
         const { getCurrentWindow, LogicalSize, LogicalPosition } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
+        restoring = true;
         await win.setSize(new LogicalSize(geo.w, geo.h));
         if (geo.x !== undefined && geo.y !== undefined) {
           await win.setPosition(new LogicalPosition(geo.x, geo.y));
         }
-      } catch { /* ignore */ }
+        // Wait for events from restore to settle before enabling saves
+        setTimeout(() => { restoring = false; }, 1000);
+      } catch { restoring = false; }
     })();
 
     // Save geometry on resize/move (debounced)
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
     const saveGeometry = async () => {
-      if (!isSaveEnabled()) return;
+      if (restoring || !isSaveEnabled()) return;
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const win = getCurrentWindow();
-        const physSize = await win.outerSize();
-        const physPos = await win.outerPosition();
+        const size = await win.innerSize();
+        const pos = await win.outerPosition();
         const factor = await win.scaleFactor();
         localStorage.setItem(WIN_KEY, JSON.stringify({
-          w: Math.round(physSize.width / factor),
-          h: Math.round(physSize.height / factor),
-          x: Math.round(physPos.x / factor),
-          y: Math.round(physPos.y / factor),
+          w: Math.round(size.width / factor),
+          h: Math.round(size.height / factor),
+          x: Math.round(pos.x / factor),
+          y: Math.round(pos.y / factor),
         }));
       } catch { /* ignore */ }
     };
