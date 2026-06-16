@@ -27,7 +27,7 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
       const w = img.width * ratio;
       const h = img.height * ratio;
       setImgSize({ w, h });
-      const ASPECT = 3.75; // Match Pomodoro container ratio
+      const ASPECT = 3.0; // Match Pomodoro container ratio
       // Fit crop box within image with this aspect ratio
       let cropW = w * 0.85;
       let cropH = cropW / ASPECT;
@@ -104,7 +104,7 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
     if (!img) return;
     const outCanvas = document.createElement('canvas');
     outCanvas.width = 1200;
-    outCanvas.height = 320;
+    outCanvas.height = 400;
     const ctx = outCanvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(img,
@@ -112,7 +112,7 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
       (crop.y / imgSize.h) * img.height,
       (crop.w / imgSize.w) * img.width,
       (crop.h / imgSize.h) * img.height,
-      0, 0, 1200, 320
+      0, 0, 1200, 400
     );
     onCrop(outCanvas.toDataURL('image/jpeg', 0.85));
   }, [crop, imgSize, onCrop]);
@@ -122,7 +122,7 @@ export default function ImageCropper({ src, onCrop, onCancel }: Props) {
     e.stopPropagation();
     const startX = e.clientX;
     const startCrop = { ...crop };
-    const ASPECT = 3.75;
+    const ASPECT = 3.0;
 
     const onMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
