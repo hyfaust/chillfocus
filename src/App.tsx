@@ -148,6 +148,17 @@ function App() {
         case 'single': p.setLoopMode('none'); p.setOrderMode('random'); break;
       }
     };
+    (window as any).__showHideWindow = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        const visible = await win.isVisible();
+        const minimized = await win.isMinimized();
+        if (minimized) { await win.unminimize(); await win.setFocus(); }
+        else if (visible) { await win.hide(); }
+        else { await win.show(); await win.setFocus(); }
+      } catch { /* ignore */ }
+    };
   }, [ensureAnalyser]);
 
   // Save/restore window size and position

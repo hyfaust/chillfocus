@@ -10,6 +10,12 @@
   justify-content: space-between;
 }
 
+.headerActions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .title {
   margin: 0;
   font-size: 15px;

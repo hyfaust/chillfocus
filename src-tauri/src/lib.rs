@@ -28,7 +28,7 @@ pub fn run() {
             }
 
             // --- Tray Menu ---
-            let show_item = MenuItemBuilder::with_id("show", "显示主界面").build(app)?;
+            let show_item = MenuItemBuilder::with_id("show", "显示/隐藏主界面").build(app)?;
             let prev_track = MenuItemBuilder::with_id("prev_track", "上一首").build(app)?;
             let toggle_music = MenuItemBuilder::with_id("toggle_music", "暂停/继续音乐").build(app)?;
             let next_track = MenuItemBuilder::with_id("next_track", "下一首").build(app)?;
@@ -89,8 +89,7 @@ pub fn run() {
                     if let Some(window) = app.get_webview_window("main") {
                         match event.id().as_ref() {
                             "show" => {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                                let _ = window.eval("window.__showHideWindow && window.__showHideWindow()");
                             }
                             "prev_track" => {
                                 let _ = window.eval("window.__prevTrack && window.__prevTrack()");

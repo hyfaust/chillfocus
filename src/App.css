@@ -56,8 +56,9 @@
 
 .music-panel {
   max-height: 100%;
-  overflow: auto;
-  padding-bottom: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 8px;
 }
 
 .ambient-divider {

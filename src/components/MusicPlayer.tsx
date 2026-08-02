@@ -631,6 +631,7 @@ export default function MusicPlayer({
                   batchTracks.forEach(t => onCopyTrackToPlaylist(t, 'star'));
                   setContextMenu(null);
                   setSelectedTrackIds(new Set());
+                  setMultiSelectMode(false);
                 }}>
                   ☆ 批量添加到收藏 ({batchTracks.length})
                 </button>
@@ -648,6 +649,7 @@ export default function MusicPlayer({
                           setContextMenu(null);
                           setSubmenuTarget(null);
                           setSelectedTrackIds(new Set());
+                          setMultiSelectMode(false);
                         }}>
                           {p.name}
                         </button>
@@ -661,6 +663,7 @@ export default function MusicPlayer({
                   if (pid) batchTracks.forEach(t => onRemoveTrack(pid, t.id));
                   setContextMenu(null);
                   setSelectedTrackIds(new Set());
+                  setMultiSelectMode(false);
                 }}>
                   ✕ 批量删除 ({batchTracks.length})
                 </button>

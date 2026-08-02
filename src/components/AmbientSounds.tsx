@@ -141,6 +141,11 @@ export default function AmbientSounds() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSound = useCallback((id: string, src: string) => {
+    // If paused, clicking any sound button clears paused state
+    if (isPaused) {
+      pausedStateRef.current = null;
+      setIsPaused(false);
+    }
     const existing = soundsRef.current.get(id);
     if (existing) {
       existing.audio.pause();
@@ -156,7 +161,7 @@ export default function AmbientSounds() {
       soundsRef.current.set(id, { audio, volume: volumes[id] ?? 0.5 });
     }
     setTick(t => t + 1);
-  }, [volumes]);
+  }, [volumes, isPaused]);
 
   const changeVolume = useCallback((id: string, vol: number) => {
     setVolumes(prev => ({ ...prev, [id]: vol }));
@@ -266,16 +271,18 @@ export default function AmbientSounds() {
           </svg>
           环境音
         </h3>
-        <button className={`${styles.addBtn} ${isPaused ? styles.pauseBtnActive : ''}`} onClick={togglePauseAll} title={isPaused ? '继续环境音' : '暂停所有环境音'}>
-          {isPaused ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-          )}
-        </button>
-        <button className={styles.addBtn} onClick={() => setShowCustomForm(!showCustomForm)} title="添加自定义环境音">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-        </button>
+        <div className={styles.headerActions}>
+          <button className={`${styles.addBtn} ${isPaused ? styles.pauseBtnActive : ''}`} onClick={togglePauseAll} title={isPaused ? '继续环境音' : '暂停所有环境音'}>
+            {isPaused ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+            )}
+          </button>
+          <button className={styles.addBtn} onClick={() => setShowCustomForm(!showCustomForm)} title="添加自定义环境音">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          </button>
+        </div>
         <input ref={fileInputRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={handleCustomFileUpload} />
       </div>
 
