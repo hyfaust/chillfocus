@@ -1,7 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Track, Playlist, LoopMode, OrderMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
-import { filterAudioFiles } from '../utils/audioFormats';
+import { filterAudioFiles, SUPPORTED_AUDIO_EXTENSIONS } from '../utils/audioFormats';
 import { isTauri, selectAudioFiles, selectAudioDirectory, selectAudioDirectoryRecursive, filesToFileArray, filesToFilePaths } from '../utils/tauriFileAccess';
 import styles from './MusicPlayer.module.css';
 
@@ -254,6 +254,37 @@ export default function MusicPlayer({
   useEffect(() => {
     if (volume > 0 && isMuted) setIsMuted(false);
   }, [volume, isMuted]);
+
+  // Tauri native file drop handler
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      if (!(await isTauri())) return;
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen<{ paths: string[]; position: { x: number; y: number } }>('tauri://drag-drop', async (event) => {
+        const paths = event.payload.paths;
+        const audioPaths = paths.filter(p => SUPPORTED_AUDIO_EXTENSIONS.test(p));
+        if (audioPaths.length === 0) return;
+        // Determine target playlist
+        const targetId = viewMode === 'star' ? 'star' : activePlaylistId;
+        if (!targetId) return;
+        // Read files from paths using Tauri fs
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const files: File[] = [];
+        const filePaths: string[] = [];
+        for (const path of audioPaths) {
+          try {
+            const data = await readFile(path);
+            const fileName = path.split(/[/\\]/).pop() || 'Unknown';
+            files.push(new File([data], fileName));
+            filePaths.push(path);
+          } catch { /* skip unreadable */ }
+        }
+        if (files.length > 0) onAddTracks(targetId, files, filePaths);
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, [activePlaylistId, viewMode, onAddTracks]);
 
   return (
     <div className={styles.container}>
