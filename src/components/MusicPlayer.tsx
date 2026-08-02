@@ -591,11 +591,14 @@ export default function MusicPlayer({
               </button>
               {hasFilePath && (
                 <button className={styles.contextMenuItem} onClick={async () => {
-                  const dir = sourceTrack!.filePath!.replace(/[/\\][^/\\]+$/, '');
+                  const filePath = sourceTrack!.filePath!;
+                  const dir = filePath.replace(/[/\\][^/\\]+$/, '');
                   try {
                     if (await isTauri()) {
                       const { open } = await import('@tauri-apps/plugin-shell');
-                      await open(dir);
+                      // Convert Windows path to file:// URI for shell.open
+                      const uri = 'file:///' + dir.replace(/\\/g, '/');
+                      await open(uri);
                     }
                   } catch { /* ignore */ }
                   setContextMenu(null);
