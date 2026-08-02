@@ -395,3 +395,72 @@ Tauri 窗口最小尺寸 800×650，桌面端 768px 断点永远不会触发（�
 ### 默认音效文件管理
 
 项目内置音效存放在 `public/sounds/`，Vite 构建时自动复制到 `dist/sounds/`。代码中通过 `${import.meta.env.BASE_URL}sounds/xxx` 引用。用户自定义音效通过 blob URL 存储在 localStorage，优先级高于默认文件。
+
+---
+
+## 十一、v1.2.0 功能演进
+
+### 11.1 Tauri 原生文件拖放
+
+**问题**：HTML5 拖放 API 在 Tauri WebView2 中对外部文件不可靠。
+
+**解决**：使用 Tauri 内置的 `tauri://drag-drop` 事件：
+
+```typescript
+const { listen } = await import('@tauri-apps/api/event');
+await listen<{ paths: string[] }>('tauri://drag-drop', async (event) => {
+  const audioPaths = event.payload.paths.filter(p => SUPPORTED_AUDIO_EXTENSIONS.test(p));
+  const { readFile } = await import('@tauri-apps/plugin-fs');
+  // readFile 读取路径 → File 对象 → onAddTracks
+});
+```
+
+> **教训**：Tauri 桌面端文件拖放应使用 `tauri://drag-drop` 原生事件，直接提供文件系统路径，支持日文和含空格路径。
+
+### 11.2 backdrop-filter 创建新包含块
+
+**问题**：右键菜单（`position: fixed`）不显示。
+
+**根因**：`.music-panel` 的 `backdrop-filter: blur(20px)` 创建新包含块，`fixed` 定位相对于面板而非视口，被 `overflow: auto` 裁剪。
+
+**解决**：React Portal 渲染到 `document.body`：
+
+```typescript
+{contextMenu && createPortal(<div>...</div>, document.body)}
+```
+
+> **教训**：`backdrop-filter`、`transform`、`perspective`、`filter` 会创建新包含块，导致 `fixed` 定位失效。Portal 是标准绕过方案。
+
+### 11.3 在资源管理器中打开文件夹
+
+`shell.open()` 和 `open` crate 对 Windows 文件夹路径不可靠。最终用 Rust 原生 `std::process::Command::new("explorer").arg(&path).spawn()`。
+
+> **教训**：Windows 打开文件夹，`explorer.exe` + 原生路径最可靠。
+
+### 11.4 播放状态持久化
+
+新增 `chillfocus-player-state` 存储 `{ trackId, playlistId }`，启动时恢复 `currentTrack`（不自动播放）。`play()`/`next()`/`prev()` 添加 fallback。
+
+> **教训**：桌面应用应持久化播放上下文，不能每次启动从零开始。
+
+### 11.5 播放模式拆分
+
+原 5 种模式拆为 `LoopMode` × `OrderMode` 两个维度，`loadPrefsFromStorage()` 添加旧格式兼容映射。
+
+### 11.6 环境音暂停/继续的状态管理
+
+`useState` 的 `isPaused` 作为 `useCallback` 依赖会导致回调频繁重建。改用 `useRef` 存储暂停状态，`useState` 仅用于 UI。
+
+> **教训**：`useCallback` 内需要读取但不想依赖的值，用 `useRef` 存储。
+
+### 11.7 托盘菜单前端桥接
+
+菜单项通过 `window.eval("window.__fnName()")` 调用前端全局函数。函数用 `useRef` 包装目标，确保访问最新状态。
+
+### 11.8 GitHub Release 更新检查
+
+前端 `fetch` GitHub API 比较版本，`confirm()` 弹窗确认后 `shell.open()` 打开 release 页面。
+
+**Rust dialog 的坑**：`tauri-plugin-dialog` v2 的 `MessageDialogBuilder` 不支持 `ok_button_label`，`blocking_show()` 返回值行为不明确。最终改用前端 `confirm()` + `shell.open()`。
+
+> **教训**：前端原生 API 能完成的功能，优先用前端方案，减少 IPC 和 Rust 依赖。

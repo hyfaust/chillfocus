@@ -26,6 +26,7 @@ export interface GlobalSettingsData {
   saveWindowSize: boolean;
   launchAtStartup: boolean;
   startMinimizedToTray: boolean;
+  autoCheckUpdate: boolean;
   localShortcuts: ShortcutConfig;
   globalShortcuts: ShortcutConfig;
   globalShortcutsEnabled: boolean;
@@ -50,6 +51,7 @@ const DEFAULT_SETTINGS: GlobalSettingsData = {
   saveWindowSize: false,
   launchAtStartup: false,
   startMinimizedToTray: false,
+  autoCheckUpdate: true,
   localShortcuts: { ...DEFAULT_LOCAL_SHORTCUTS },
   globalShortcuts: { ...EMPTY_SHORTCUTS },
   globalShortcutsEnabled: false,
@@ -107,6 +109,31 @@ export default function GlobalSettings({ onClose }: Props) {
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const [addedActions, setAddedActions] = useState<(keyof ShortcutConfig)[]>([]);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'found' | 'up-to-date' | 'error'>('idle');
+  const [latestVersion, setLatestVersion] = useState('');
+  const [releaseUrl, setReleaseUrl] = useState('');
+
+  const CURRENT_VERSION = '1.2.0';
+
+  const checkForUpdates = useCallback(async () => {
+    setUpdateStatus('checking');
+    try {
+      const resp = await fetch('https://api.github.com/repos/hyfaust/chillfocus/releases/latest');
+      if (!resp.ok) throw new Error('Failed to fetch');
+      const data = await resp.json();
+      const tag = data.tag_name?.replace(/^v/, '') || '';
+      const url = data.html_url || 'https://github.com/hyfaust/chillfocus/releases';
+      setLatestVersion(tag);
+      setReleaseUrl(url);
+      if (tag && tag !== CURRENT_VERSION) {
+        setUpdateStatus('found');
+      } else {
+        setUpdateStatus('up-to-date');
+      }
+    } catch {
+      setUpdateStatus('error');
+    }
+  }, []);
 
   useEffect(() => { isTauri().then(setIsTauriEnv); }, []);
 
@@ -281,6 +308,51 @@ export default function GlobalSettings({ onClose }: Props) {
 
         <div className={styles.section}>
           <button className={styles.quitBtn} onClick={handleForceQuit}>退出程序</button>
+        </div>
+
+        {/* Update check */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.toggleTitle}>自动检查更新</span>
+              <span className={styles.toggleDesc}>启动时自动检查是否有新版本 (当前 v{CURRENT_VERSION})</span>
+            </div>
+            <button className={`${styles.toggle} ${settings.autoCheckUpdate ? styles.toggleOn : ''}`} onClick={() => updateSetting('autoCheckUpdate', !settings.autoCheckUpdate)}>
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button className={styles.quitBtn} style={{ flex: 'none', padding: '6px 16px' }} onClick={() => {
+              if (isTauriEnv) {
+                import('@tauri-apps/plugin-shell').then(({ open }) => open('https://github.com/hyfaust/chillfocus'));
+              } else {
+                window.open('https://github.com/hyfaust/chillfocus', '_blank');
+              }
+            }}>
+              项目源码
+            </button>
+            <button className={styles.quitBtn} style={{ flex: 'none', padding: '6px 16px' }} onClick={checkForUpdates} disabled={updateStatus === 'checking'}>
+              {updateStatus === 'checking' ? '检查中...' : '检查更新'}
+            </button>
+            {updateStatus === 'found' && (
+              <span style={{ fontSize: 12, color: '#69db7c' }}>
+                发现新版本 v{latestVersion} →{' '}
+                <button onClick={() => {
+                  if (isTauriEnv) {
+                    import('@tauri-apps/plugin-shell').then(({ open }) => open(releaseUrl));
+                  } else {
+                    window.open(releaseUrl, '_blank');
+                  }
+                }} style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>前往下载</button>
+              </span>
+            )}
+            {updateStatus === 'up-to-date' && (
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>已是最新版本</span>
+            )}
+            {updateStatus === 'error' && (
+              <span style={{ fontSize: 12, color: '#ff6b6b' }}>检查失败，请稍后重试</span>
+            )}
+          </div>
         </div>
 
         {/* Merged shortcuts section */}

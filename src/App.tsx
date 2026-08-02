@@ -100,6 +100,31 @@ function App() {
     return () => document.removeEventListener('click', handleClick);
   }, [ensureAnalyser]);
 
+  // Auto check for updates on startup
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('chillfocus-global-settings');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (!s.autoCheckUpdate) return;
+    } catch { return; }
+    const CURRENT_VERSION = '1.2.0';
+    fetch('https://api.github.com/repos/hyfaust/chillfocus/releases/latest')
+      .then(r => r.json())
+      .then(data => {
+        const tag = data.tag_name?.replace(/^v/, '') || '';
+        const url = data.html_url || 'https://github.com/hyfaust/chillfocus/releases';
+        if (tag && tag !== CURRENT_VERSION) {
+          if (confirm(`发现新版本 v${tag}，是否前往下载？`)) {
+            import('@tauri-apps/plugin-shell').then(({ open }) => open(url)).catch(() => {
+              window.open(url, '_blank');
+            });
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Sync minimizeToTray + startMinimizedToTray on mount
   useEffect(() => {
     if (!isTauriEnv()) return;
