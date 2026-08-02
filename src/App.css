@@ -55,9 +55,7 @@
 }
 
 .music-panel {
-  max-height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   padding-bottom: 8px;
 }
 

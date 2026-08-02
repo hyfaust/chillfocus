@@ -86,6 +86,7 @@ export default function AmbientSounds() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const restoredRef = useRef(false);
   const pausedStateRef = useRef<{ ids: string[]; volumes: Record<string, number> } | null>(null);
+  const isPausedRef = useRef(false);
   const [isPaused, setIsPaused] = useState(false);
 
   // Persist custom sounds
@@ -142,8 +143,9 @@ export default function AmbientSounds() {
 
   const toggleSound = useCallback((id: string, src: string) => {
     // If paused, clicking any sound button clears paused state
-    if (isPaused) {
+    if (isPausedRef.current) {
       pausedStateRef.current = null;
+      isPausedRef.current = false;
       setIsPaused(false);
     }
     const existing = soundsRef.current.get(id);
@@ -161,7 +163,7 @@ export default function AmbientSounds() {
       soundsRef.current.set(id, { audio, volume: volumes[id] ?? 0.5 });
     }
     setTick(t => t + 1);
-  }, [volumes, isPaused]);
+  }, [volumes]);
 
   const changeVolume = useCallback((id: string, vol: number) => {
     setVolumes(prev => ({ ...prev, [id]: vol }));
@@ -208,7 +210,7 @@ export default function AmbientSounds() {
   }, []);
 
   const togglePauseAll = useCallback(() => {
-    if (isPaused) {
+    if (isPausedRef.current) {
       // Resume: restore from saved state
       if (pausedStateRef.current) {
         const { ids, volumes: savedVolumes } = pausedStateRef.current;
@@ -229,6 +231,7 @@ export default function AmbientSounds() {
         });
         pausedStateRef.current = null;
       }
+      isPausedRef.current = false;
       setIsPaused(false);
     } else {
       // Pause: save current state and stop all
@@ -238,10 +241,11 @@ export default function AmbientSounds() {
       pausedStateRef.current = { ids, volumes: savedVolumes };
       soundsRef.current.forEach(s => { s.audio.pause(); s.audio.currentTime = 0; });
       soundsRef.current.clear();
+      isPausedRef.current = true;
       setIsPaused(true);
     }
     setTick(t => t + 1);
-  }, [isPaused, customSounds]);
+  }, [customSounds]);
 
   useEffect(() => {
     return () => {
