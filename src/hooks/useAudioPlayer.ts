@@ -400,6 +400,17 @@ export function useAudioPlayer() {
     }));
   }, []);
 
+  const renameTrack = useCallback((trackId: string, newName: string) => {
+    setState(prev => ({
+      ...prev,
+      playlists: prev.playlists.map(p => ({
+        ...p,
+        tracks: p.tracks.map(t => t.id === trackId ? { ...t, name: newName } : t),
+      })),
+      currentTrack: prev.currentTrack?.id === trackId ? { ...prev.currentTrack, name: newName } : prev.currentTrack,
+    }));
+  }, []);
+
   const addTracksToPlaylist = useCallback((playlistId: string, files: File[], paths?: string[]) => {
     const isTauriMode = !!paths && paths.length > 0;
 
@@ -735,7 +746,7 @@ export function useAudioPlayer() {
   return {
     ...state, audioRef, getAnalyser, playMode,
     createPlaylist, deletePlaylist, renamePlaylist, setActivePlaylist,
-    addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist, copyTrackToPlaylist,
+    addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist, copyTrackToPlaylist, renameTrack,
     play, pause, togglePlay, next, prev, seek, setVolume, setLoopMode, setOrderMode,
     playSpecificTrack, playTrack,
     exportPlaylist, exportPlaylists, importPlaylists, reassociateFiles,

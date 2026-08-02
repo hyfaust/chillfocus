@@ -32,6 +32,7 @@ interface Props {
   onAddUrlTrack: (playlistId: string, url: string, name?: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
   onCopyTrackToPlaylist: (track: Track, targetPlaylistId: string) => void;
+  onRenameTrack: (trackId: string, newName: string) => void;
   onPlayTrack: (playlistId: string, track: Track) => void;
   onExportPlaylists: (ids: string[]) => void;
   onImportPlaylists: (file: File) => void;
@@ -47,7 +48,7 @@ export default function MusicPlayer({
   playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, loopMode, orderMode, playTimer,
   onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetLoopMode, onSetOrderMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
-  onAddTracks, onAddUrlTrack, onRemoveTrack, onCopyTrackToPlaylist, onPlayTrack,
+  onAddTracks, onAddUrlTrack, onRemoveTrack, onCopyTrackToPlaylist, onRenameTrack, onPlayTrack,
   onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -563,7 +564,10 @@ export default function MusicPlayer({
             if (!track) return null;
             const isStarred = starPlaylist?.tracks.some(t => (t.sourceFileName || t.name) === (track.sourceFileName || track.name));
             const currentPid = viewMode === 'star' ? 'star' : viewMode === 'all' ? undefined : activePlaylistId;
-            const otherPlaylists = playlists.filter(p => p.id !== currentPid);
+            const otherPlaylists = playlists.filter(p => p.id !== currentPid && p.id !== 'star');
+            // Find the source playlist's track to get filePath
+            const sourceTrack = playlists.flatMap(p => p.tracks).find(t => t.id === trackId);
+            const hasFilePath = !!sourceTrack?.filePath;
             return <>
               <button className={styles.contextMenuItem} onClick={() => {
                 if (!starPlaylist) return;
@@ -577,6 +581,28 @@ export default function MusicPlayer({
               }}>
                 {isStarred ? '★ 从收藏移除' : '☆ 添加到收藏'}
               </button>
+              <div className={styles.contextDivider} />
+              <button className={styles.contextMenuItem} onClick={() => {
+                const newName = prompt('输入新的曲目名称', track.name);
+                if (newName && newName.trim()) onRenameTrack(trackId, newName.trim());
+                setContextMenu(null);
+              }}>
+                ✏ 重命名
+              </button>
+              {hasFilePath && (
+                <button className={styles.contextMenuItem} onClick={async () => {
+                  const dir = sourceTrack!.filePath!.replace(/[/\\][^/\\]+$/, '');
+                  try {
+                    if (await isTauri()) {
+                      const { open } = await import('@tauri-apps/plugin-shell');
+                      await open(dir);
+                    }
+                  } catch { /* ignore */ }
+                  setContextMenu(null);
+                }}>
+                  📁 在资源管理器中打开
+                </button>
+              )}
               <div className={styles.contextDivider} />
               <div className={styles.contextSubmenuWrap}
                 onMouseEnter={() => setSubmenuTarget('add-to')}
@@ -592,7 +618,7 @@ export default function MusicPlayer({
                         setContextMenu(null);
                         setSubmenuTarget(null);
                       }}>
-                        {p.id === 'star' ? '★ ' : ''}{p.name}
+                        {p.name}
                       </button>
                     ))}
                     {otherPlaylists.length === 0 && <div className={styles.contextMenuEmpty}>无其它列表</div>}
@@ -614,7 +640,7 @@ export default function MusicPlayer({
             const tabId = contextMenu.targetId;
             const playlist = playlists.find(p => p.id === tabId);
             if (!playlist) return null;
-            const otherPlaylists = playlists.filter(p => p.id !== tabId);
+            const otherPlaylists = playlists.filter(p => p.id !== tabId && p.id !== 'star');
             return <>
               <button className={styles.contextMenuItem} onClick={() => {
                 setEditingPlaylistId(tabId);
