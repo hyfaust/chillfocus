@@ -61,6 +61,13 @@ function App() {
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Prevent default browser context menu (custom menus are handled per-component)
+  useEffect(() => {
+    const handler = (e: Event) => e.preventDefault();
+    document.addEventListener('contextmenu', handler);
+    return () => document.removeEventListener('contextmenu', handler);
+  }, []);
+
   // Refs for stable shortcut/tray callbacks
   const pomodoroRef = useRef(pomodoro);
   pomodoroRef.current = pomodoro;

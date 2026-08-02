@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { Track, Playlist, LoopMode, OrderMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles, SUPPORTED_AUDIO_EXTENSIONS } from '../utils/audioFormats';
@@ -550,8 +551,8 @@ export default function MusicPlayer({
         )}
       </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
+      {/* Context Menu — rendered via portal to escape backdrop-filter containing block */}
+      {contextMenu && createPortal(
         <div ref={contextMenuRef} className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
           {contextMenu.type === 'track' && (() => {
             const trackId = contextMenu.targetId;
@@ -581,7 +582,8 @@ export default function MusicPlayer({
               </button>
             </>;
           })()}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
