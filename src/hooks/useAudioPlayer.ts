@@ -121,6 +121,14 @@ export function useAudioPlayer() {
       }
     }
 
+    console.log('[useAudioPlayer] Init:', {
+      savedState,
+      restoredPlaylistId: activePlaylistId,
+      restoredTrackId: currentTrack?.id ?? null,
+      playlistCount: playlists.length,
+      firstPlaylistId: playlists[0]?.id,
+    });
+
     return {
       playlists,
       activePlaylistId,
@@ -254,14 +262,22 @@ export function useAudioPlayer() {
     setState(prev => ({ ...prev, currentTrack: { ...track, url }, isPlaying: true, currentTime: 0 }));
   }, [getAudio, resolveTrackUrl]);
 
-  const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
+  const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number; newShuffleOrder?: number[] } => {
     if (orderMode === 'random') {
+      // Auto-generate shuffle order if empty
+      let order = shuffleOrd;
+      if (order.length === 0) {
+        order = generateShuffleOrder(playlist.tracks.length);
+        const pos = order.indexOf(currentIndex);
+        if (pos > 0) [order[0], order[pos]] = [order[pos], order[0]];
+        return { index: order[1] ?? order[0], newShuffleIdx: 1, newShuffleOrder: order };
+      }
       let nextShuffleIdx = shuffleIdx + 1;
-      if (nextShuffleIdx >= shuffleOrd.length) {
+      if (nextShuffleIdx >= order.length) {
         if (loopMode === 'list') nextShuffleIdx = 0;
         else return { index: -1, newShuffleIdx: 0 };
       }
-      return { index: shuffleOrd[nextShuffleIdx], newShuffleIdx: nextShuffleIdx };
+      return { index: order[nextShuffleIdx], newShuffleIdx: nextShuffleIdx };
     }
     // sequential
     const next = currentIndex + 1;
@@ -270,16 +286,23 @@ export function useAudioPlayer() {
       return { index: -1, newShuffleIdx: 0 };
     }
     return { index: next, newShuffleIdx: 0 };
-  }, []);
+  }, [generateShuffleOrder]);
 
-  const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
+  const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number; newShuffleOrder?: number[] } => {
     if (orderMode === 'random') {
+      let order = shuffleOrd;
+      if (order.length === 0) {
+        order = generateShuffleOrder(playlist.tracks.length);
+        const pos = order.indexOf(currentIndex);
+        if (pos > 0) [order[0], order[pos]] = [order[pos], order[0]];
+        return { index: order[order.length - 1], newShuffleIdx: order.length - 1, newShuffleOrder: order };
+      }
       let prevShuffleIdx = shuffleIdx - 1;
       if (prevShuffleIdx < 0) {
-        if (loopMode === 'list') prevShuffleIdx = shuffleOrd.length - 1;
+        if (loopMode === 'list') prevShuffleIdx = order.length - 1;
         else return { index: 0, newShuffleIdx: 0 };
       }
-      return { index: shuffleOrd[prevShuffleIdx], newShuffleIdx: prevShuffleIdx };
+      return { index: order[prevShuffleIdx], newShuffleIdx: prevShuffleIdx };
     }
     // sequential
     const prev = currentIndex - 1;
@@ -298,7 +321,8 @@ export function useAudioPlayer() {
     const onEnded = async () => {
       const s = stateRef.current;
       const playlist = s.playlists.find(p => p.id === s.activePlaylistId);
-      if (!playlist || !s.currentTrack) { setState(prev => ({ ...prev, isPlaying: false })); return; }
+      console.log('[onEnded] activePlaylistId:', s.activePlaylistId, 'currentTrack:', s.currentTrack?.id, 'playlist:', playlist?.id, 'loopMode:', s.loopMode, 'orderMode:', s.orderMode);
+      if (!playlist || !s.currentTrack) { console.warn('[onEnded] No playlist or currentTrack, stopping'); setState(prev => ({ ...prev, isPlaying: false })); return; }
       // Single loop: replay
       if (s.loopMode === 'single') {
         audio.currentTime = 0;
@@ -311,14 +335,14 @@ export function useAudioPlayer() {
         return;
       }
       const idx = playlist.tracks.findIndex(t => t.id === s.currentTrack!.id);
-      const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.loopMode, s.orderMode, s.shuffleIndex, s.shuffleOrder);
+      const { index: nextIdx, newShuffleIdx, newShuffleOrder } = getNextTrackIndex(idx, playlist, s.loopMode, s.orderMode, s.shuffleIndex, s.shuffleOrder);
       if (nextIdx < 0 || nextIdx >= playlist.tracks.length) { setState(prev => ({ ...prev, isPlaying: false })); return; }
       const nextTrack = playlist.tracks[nextIdx];
       const url = await resolveTrackUrl(nextTrack);
       if (!url) { setState(prev => ({ ...prev, isPlaying: false })); return; }
       audio.src = url;
       audio.play().catch(() => {});
-      setState(prev => ({ ...prev, currentTrack: { ...nextTrack, url }, isPlaying: true, currentTime: 0, shuffleIndex: newShuffleIdx }));
+      setState(prev => ({ ...prev, currentTrack: { ...nextTrack, url }, isPlaying: true, currentTime: 0, shuffleIndex: newShuffleIdx, ...(newShuffleOrder ? { shuffleOrder: newShuffleOrder } : {}) }));
     };
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -558,8 +582,12 @@ export function useAudioPlayer() {
       audio.play().catch(() => {});
       setState(prev => ({ ...prev, isPlaying: true }));
     } else {
-      const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
-      if (playlist && playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[0]);
+      // Fallback: find a playlist with tracks
+      let playlist = state.playlists.find(p => p.id === state.activePlaylistId);
+      if (!playlist || playlist.tracks.length === 0) {
+        playlist = state.playlists.find(p => p.tracks.length > 0);
+      }
+      if (playlist) playSpecificTrack(playlist.id, playlist.tracks[0]);
     }
   }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playSpecificTrack, resolveTrackUrl]);
 
@@ -569,16 +597,36 @@ export function useAudioPlayer() {
 
   const next = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
-    if (!playlist) return;
-    // Fallback: if no currentTrack, start from first track
+    if (!playlist) { console.warn('[next] No playlist found for', state.activePlaylistId); return; }
     if (!state.currentTrack) {
+      console.log('[next] No currentTrack, starting from first');
       if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[0]);
       return;
     }
-    const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
-    const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
+    let idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
+    console.log('[next] currentTrack.id:', state.currentTrack.id, 'activePlaylistId:', state.activePlaylistId, 'idx:', idx, 'playlist.tracks.length:', playlist.tracks.length);
+    // Fallback: if currentTrack not in active playlist, search all playlists
+    if (idx < 0) {
+      console.warn('[next] Track not in active playlist, searching all...');
+      const sourcePlaylist = state.playlists.find(p => p.tracks.some(t => t.id === state.currentTrack!.id));
+      if (sourcePlaylist) {
+        console.log('[next] Found in playlist:', sourcePlaylist.id);
+        idx = sourcePlaylist.tracks.findIndex(t => t.id === state.currentTrack!.id);
+        const { index: nextIdx, newShuffleIdx, newShuffleOrder } = getNextTrackIndex(idx, sourcePlaylist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
+        if (nextIdx >= 0 && nextIdx < sourcePlaylist.tracks.length) {
+          setState(prev => ({ ...prev, activePlaylistId: sourcePlaylist.id, shuffleIndex: newShuffleIdx, ...(newShuffleOrder ? { shuffleOrder: newShuffleOrder } : {}) }));
+          playTrack(sourcePlaylist.tracks[nextIdx]);
+        }
+        return;
+      }
+      console.warn('[next] Track not found anywhere, starting from first of active playlist');
+      if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[0]);
+      return;
+    }
+    const { index: nextIdx, newShuffleIdx, newShuffleOrder } = getNextTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
+    console.log('[next] nextIdx:', nextIdx);
     if (nextIdx >= 0 && nextIdx < playlist.tracks.length) {
-      setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
+      setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx, ...(newShuffleOrder ? { shuffleOrder: newShuffleOrder } : {}) }));
       playTrack(playlist.tracks[nextIdx]);
     }
   }, [state.playlists, state.activePlaylistId, state.currentTrack, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack, playSpecificTrack]);
@@ -586,15 +634,29 @@ export function useAudioPlayer() {
   const prev = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
     if (!playlist) return;
-    // Fallback: if no currentTrack, start from last track
     if (!state.currentTrack) {
       if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[playlist.tracks.length - 1]);
       return;
     }
-    const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
-    const { index: prevIdx, newShuffleIdx } = getPrevTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
+    let idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
+    // Fallback: if currentTrack not in active playlist, search all playlists
+    if (idx < 0) {
+      const sourcePlaylist = state.playlists.find(p => p.tracks.some(t => t.id === state.currentTrack!.id));
+      if (sourcePlaylist) {
+        idx = sourcePlaylist.tracks.findIndex(t => t.id === state.currentTrack!.id);
+        const { index: prevIdx, newShuffleIdx, newShuffleOrder } = getPrevTrackIndex(idx, sourcePlaylist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
+        if (prevIdx >= 0 && prevIdx < sourcePlaylist.tracks.length) {
+          setState(prev => ({ ...prev, activePlaylistId: sourcePlaylist.id, shuffleIndex: newShuffleIdx, ...(newShuffleOrder ? { shuffleOrder: newShuffleOrder } : {}) }));
+          playTrack(sourcePlaylist.tracks[prevIdx]);
+        }
+        return;
+      }
+      if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[playlist.tracks.length - 1]);
+      return;
+    }
+    const { index: prevIdx, newShuffleIdx, newShuffleOrder } = getPrevTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
     if (prevIdx >= 0 && prevIdx < playlist.tracks.length) {
-      setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
+      setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx, ...(newShuffleOrder ? { shuffleOrder: newShuffleOrder } : {}) }));
       playTrack(playlist.tracks[prevIdx]);
     }
   }, [state.playlists, state.activePlaylistId, state.currentTrack, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack, playSpecificTrack]);

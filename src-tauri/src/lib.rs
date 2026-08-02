@@ -27,6 +27,12 @@ pub fn run() {
                 )?;
             }
 
+            // Open devtools in debug mode
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                window.open_devtools();
+            }
+
             // --- Tray Menu ---
             let show_item = MenuItemBuilder::with_id("show", "显示/隐藏主界面").build(app)?;
             let prev_track = MenuItemBuilder::with_id("prev_track", "上一首").build(app)?;
@@ -152,7 +158,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch, open_in_explorer, show_update_dialog])
+        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch, open_in_explorer])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -208,19 +214,4 @@ fn open_in_explorer(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-#[tauri::command]
-fn show_update_dialog(app: tauri::AppHandle, version: String, url: String) {
-    use tauri_plugin_dialog::DialogExt;
-    let msg = format!("发现新版本 v{}\n\n点击确定前往下载页面", version);
-    app.dialog()
-        .message(&msg)
-        .title("ChillFocus 更新")
-        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
-        .blocking_show();
-    // Open the release URL in default browser
-    let _ = std::process::Command::new("cmd")
-        .args(["/c", "start", "", &url])
-        .spawn();
 }

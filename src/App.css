@@ -57,6 +57,8 @@
 .music-panel {
   overflow: visible;
   padding-bottom: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ambient-divider {
