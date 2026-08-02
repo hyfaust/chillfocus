@@ -87,6 +87,11 @@ export default function MusicPlayer({
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [submenuTarget, setSubmenuTarget] = useState<string | null>(null);
 
+  // Multi-select state
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
   const starPlaylist = playlists.find(p => p.id === 'star');
 
@@ -495,6 +500,19 @@ export default function MusicPlayer({
           )}
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <input ref={reassociateInputRef} type="file" {...({ webkitdirectory: '' } as any)} style={{ display: 'none' }} onChange={handleReassociateFile} />
+          <button
+            className={`${styles.multiSelectBtn} ${multiSelectMode ? styles.multiSelectActive : ''}`}
+            onClick={() => {
+              setMultiSelectMode(m => !m);
+              setSelectedTrackIds(new Set());
+              setLastSelectedId(null);
+            }}
+            title={multiSelectMode ? '退出多选' : '多选模式'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+            </svg>
+          </button>
           {viewMode !== 'all' && (
           <div className={styles.addMusicWrap}>
             <button className={styles.uploadBtn} onClick={() => setShowAddMenu(!showAddMenu)}>
@@ -523,14 +541,49 @@ export default function MusicPlayer({
         </div>
 
         <ul className={styles.trackList}>
-          {displayedTracks.map((track, i) => (
+          {displayedTracks.map((track, i) => {
+            const isSelected = selectedTrackIds.has(track.id);
+            return (
             <li key={`${viewMode}-${track.id}`}
-              className={`${styles.trackItem} ${currentTrack?.id === track.id ? styles.trackItemActive : ''}`}
-              onClick={() => {
-                const pid = viewMode === 'star' ? 'star' : viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id ?? activePlaylistId : activePlaylistId;
-                if (pid) onPlayTrack(pid, track);
+              className={`${styles.trackItem} ${currentTrack?.id === track.id ? styles.trackItemActive : ''} ${isSelected ? styles.trackItemSelected : ''}`}
+              onClick={(e) => {
+                if (multiSelectMode) {
+                  setSelectedTrackIds(prev => {
+                    const next = new Set(prev);
+                    if (e.shiftKey && lastSelectedId) {
+                      // Range select
+                      const ids = displayedTracks.map(t => t.id);
+                      const start = ids.indexOf(lastSelectedId);
+                      const end = ids.indexOf(track.id);
+                      if (start >= 0 && end >= 0) {
+                        const [lo, hi] = start < end ? [start, end] : [end, start];
+                        for (let j = lo; j <= hi; j++) next.add(ids[j]);
+                      }
+                    } else if (e.ctrlKey || e.metaKey) {
+                      // Toggle single
+                      if (next.has(track.id)) next.delete(track.id); else next.add(track.id);
+                    } else {
+                      // Normal click in multi-select = toggle
+                      if (next.has(track.id)) next.delete(track.id); else next.add(track.id);
+                    }
+                    return next;
+                  });
+                  setLastSelectedId(track.id);
+                } else {
+                  const pid = viewMode === 'star' ? 'star' : viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id ?? activePlaylistId : activePlaylistId;
+                  if (pid) onPlayTrack(pid, track);
+                }
               }}
-              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id }); setSubmenuTarget(null); }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (multiSelectMode && selectedTrackIds.size > 1) {
+                  // Batch context menu
+                  setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id });
+                } else {
+                  setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id });
+                }
+                setSubmenuTarget(null);
+              }}
             >
               <span className={styles.trackIndex}>{currentTrack?.id === track.id && isPlaying ? '♪' : i + 1}</span>
               <span className={styles.trackItemName}>{track.name}</span>
@@ -541,7 +594,8 @@ export default function MusicPlayer({
               </button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
         {displayedTracks.length === 0 && (
           <div className={styles.empty}>
@@ -562,12 +616,58 @@ export default function MusicPlayer({
             const trackId = contextMenu.targetId;
             const track = displayedTracks.find(t => t.id === trackId);
             if (!track) return null;
+            const isBatch = multiSelectMode && selectedTrackIds.size > 1 && selectedTrackIds.has(trackId);
+            const batchTracks = isBatch ? displayedTracks.filter(t => selectedTrackIds.has(t.id)) : [track];
             const isStarred = starPlaylist?.tracks.some(t => (t.sourceFileName || t.name) === (track.sourceFileName || track.name));
             const currentPid = viewMode === 'star' ? 'star' : viewMode === 'all' ? undefined : activePlaylistId;
             const otherPlaylists = playlists.filter(p => p.id !== currentPid && p.id !== 'star');
-            // Find the source playlist's track to get filePath
             const sourceTrack = playlists.flatMap(p => p.tracks).find(t => t.id === trackId);
             const hasFilePath = !!sourceTrack?.filePath;
+
+            if (isBatch) {
+              // Batch context menu
+              return <>
+                <button className={styles.contextMenuItem} onClick={() => {
+                  batchTracks.forEach(t => onCopyTrackToPlaylist(t, 'star'));
+                  setContextMenu(null);
+                  setSelectedTrackIds(new Set());
+                }}>
+                  ☆ 批量添加到收藏 ({batchTracks.length})
+                </button>
+                <div className={styles.contextSubmenuWrap}
+                  onMouseEnter={() => setSubmenuTarget('batch-add-to')}
+                  onMouseLeave={() => setSubmenuTarget(null)}>
+                  <button className={styles.contextMenuItem}>
+                    批量添加到 ▸
+                  </button>
+                  {submenuTarget === 'batch-add-to' && (
+                    <div className={styles.contextSubmenu}>
+                      {otherPlaylists.map(p => (
+                        <button key={p.id} className={styles.contextMenuItem} onClick={() => {
+                          batchTracks.forEach(t => onCopyTrackToPlaylist(t, p.id));
+                          setContextMenu(null);
+                          setSubmenuTarget(null);
+                          setSelectedTrackIds(new Set());
+                        }}>
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.contextDivider} />
+                <button className={styles.contextMenuItem} onClick={() => {
+                  const pid = viewMode === 'star' ? 'star' : activePlaylistId;
+                  if (pid) batchTracks.forEach(t => onRemoveTrack(pid, t.id));
+                  setContextMenu(null);
+                  setSelectedTrackIds(new Set());
+                }}>
+                  ✕ 批量删除 ({batchTracks.length})
+                </button>
+              </>;
+            }
+
+            // Single track context menu
             return <>
               <button className={styles.contextMenuItem} onClick={() => {
                 if (!starPlaylist) return;

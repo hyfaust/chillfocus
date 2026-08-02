@@ -110,6 +110,37 @@
   opacity: 0.6;
 }
 
+/* Multi-select */
+.multiSelectBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.multiSelectBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.multiSelectActive {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 93, 250, 0.15);
+}
+
+.trackItemSelected {
+  background: rgba(124, 93, 250, 0.12) !important;
+  border-left: 3px solid var(--accent);
+}
+
 .playlistTabs {
   display: flex;
   gap: 4px;
