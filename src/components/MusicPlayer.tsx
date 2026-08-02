@@ -84,6 +84,7 @@ export default function MusicPlayer({
   }
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [submenuTarget, setSubmenuTarget] = useState<string | null>(null);
 
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
   const starPlaylist = playlists.find(p => p.id === 'star');
@@ -135,6 +136,7 @@ export default function MusicPlayer({
     const handleClick = (e: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
         setContextMenu(null);
+        setSubmenuTarget(null);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -345,7 +347,8 @@ export default function MusicPlayer({
             ) : (
               <button className={`${styles.playlistTab} ${p.id === activePlaylistId && viewMode === 'normal' ? styles.playlistTabActive : ''}`}
                 onClick={() => { onSetActivePlaylist(p.id); setViewMode('normal'); }}
-                onDoubleClick={() => { setEditingPlaylistId(p.id); setEditName(p.name); }}>
+                onDoubleClick={() => { setEditingPlaylistId(p.id); setEditName(p.name); }}
+                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'tab', x: e.clientX, y: e.clientY, targetId: p.id }); setSubmenuTarget(null); }}>
                 {p.name}
               </button>
             )}
@@ -526,7 +529,7 @@ export default function MusicPlayer({
                 const pid = viewMode === 'star' ? 'star' : viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id ?? activePlaylistId : activePlaylistId;
                 if (pid) onPlayTrack(pid, track);
               }}
-              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id }); }}
+              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id }); setSubmenuTarget(null); }}
             >
               <span className={styles.trackIndex}>{currentTrack?.id === track.id && isPlaying ? '♪' : i + 1}</span>
               <span className={styles.trackItemName}>{track.name}</span>
@@ -559,6 +562,8 @@ export default function MusicPlayer({
             const track = displayedTracks.find(t => t.id === trackId);
             if (!track) return null;
             const isStarred = starPlaylist?.tracks.some(t => (t.sourceFileName || t.name) === (track.sourceFileName || track.name));
+            const currentPid = viewMode === 'star' ? 'star' : viewMode === 'all' ? undefined : activePlaylistId;
+            const otherPlaylists = playlists.filter(p => p.id !== currentPid);
             return <>
               <button className={styles.contextMenuItem} onClick={() => {
                 if (!starPlaylist) return;
@@ -570,15 +575,95 @@ export default function MusicPlayer({
                 }
                 setContextMenu(null);
               }}>
-                {isStarred ? '从收藏移除' : '添加到收藏'}
+                {isStarred ? '★ 从收藏移除' : '☆ 添加到收藏'}
               </button>
+              <div className={styles.contextDivider} />
+              <div className={styles.contextSubmenuWrap}
+                onMouseEnter={() => setSubmenuTarget('add-to')}
+                onMouseLeave={() => setSubmenuTarget(null)}>
+                <button className={styles.contextMenuItem}>
+                  添加到 ▸
+                </button>
+                {submenuTarget === 'add-to' && (
+                  <div className={styles.contextSubmenu}>
+                    {otherPlaylists.map(p => (
+                      <button key={p.id} className={styles.contextMenuItem} onClick={() => {
+                        onCopyTrackToPlaylist(track, p.id);
+                        setContextMenu(null);
+                        setSubmenuTarget(null);
+                      }}>
+                        {p.id === 'star' ? '★ ' : ''}{p.name}
+                      </button>
+                    ))}
+                    {otherPlaylists.length === 0 && <div className={styles.contextMenuEmpty}>无其它列表</div>}
+                  </div>
+                )}
+              </div>
               <div className={styles.contextDivider} />
               <button className={styles.contextMenuItem} onClick={() => {
                 const pid = viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id : (viewMode === 'star' ? 'star' : activePlaylistId);
                 if (pid) onRemoveTrack(pid, track.id);
                 setContextMenu(null);
               }}>
-                {viewMode === 'all' ? '从源列表删除' : '从当前列表删除'}
+                ✕ {viewMode === 'all' ? '从源列表删除' : '从当前列表删除'}
+              </button>
+            </>;
+          })()}
+
+          {contextMenu.type === 'tab' && (() => {
+            const tabId = contextMenu.targetId;
+            const playlist = playlists.find(p => p.id === tabId);
+            if (!playlist) return null;
+            const otherPlaylists = playlists.filter(p => p.id !== tabId);
+            return <>
+              <button className={styles.contextMenuItem} onClick={() => {
+                setEditingPlaylistId(tabId);
+                setEditName(playlist.name);
+                setContextMenu(null);
+              }}>
+                ✏ 重命名
+              </button>
+              <button className={styles.contextMenuItem} onClick={() => {
+                onDeletePlaylist(tabId);
+                setContextMenu(null);
+              }}>
+                ✕ 删除列表
+              </button>
+              <div className={styles.contextDivider} />
+              {tabId !== 'star' && (
+                <button className={styles.contextMenuItem} onClick={() => {
+                  playlist.tracks.forEach(t => onCopyTrackToPlaylist(t, 'star'));
+                  setContextMenu(null);
+                }}>
+                  ☆ 复制全部到收藏
+                </button>
+              )}
+              <div className={styles.contextSubmenuWrap}
+                onMouseEnter={() => setSubmenuTarget('tab-copy-to')}
+                onMouseLeave={() => setSubmenuTarget(null)}>
+                <button className={styles.contextMenuItem}>
+                  复制全部到 ▸
+                </button>
+                {submenuTarget === 'tab-copy-to' && (
+                  <div className={styles.contextSubmenu}>
+                    {otherPlaylists.map(p => (
+                      <button key={p.id} className={styles.contextMenuItem} onClick={() => {
+                        playlist.tracks.forEach(t => onCopyTrackToPlaylist(t, p.id));
+                        setContextMenu(null);
+                        setSubmenuTarget(null);
+                      }}>
+                        {p.id === 'star' ? '★ ' : ''}{p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className={styles.contextDivider} />
+              <button className={styles.contextMenuItem} onClick={() => {
+                onExportPlaylists([tabId]);
+                setContextMenu(null);
+              }}>
+                ↓ 导出播放列表
               </button>
             </>;
           })()}
