@@ -16,6 +16,9 @@ export interface Playlist {
 
 export type PlayMode = 'sequential' | 'loop-list' | 'loop-single' | 'shuffle' | 'single';
 
+export type LoopMode = 'single' | 'list' | 'none';
+export type OrderMode = 'sequential' | 'random';
+
 export type TimerPhase = 'focus' | 'short-break' | 'long-break';
 
 export interface PomodoroSettings {

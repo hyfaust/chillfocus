@@ -269,6 +269,36 @@
 
 .modeBtn:hover { color: var(--accent); }
 
+.modeBtnInactive {
+  opacity: 0.4;
+}
+
+.modeBtn {
+  position: relative;
+}
+
+.modeBtnBadge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.modeBtnSlash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
 .controlBtn {
   width: 32px;
   height: 32px;

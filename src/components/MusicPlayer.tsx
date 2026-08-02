@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
-import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
+import type { Track, Playlist, LoopMode, OrderMode, PlayTimer } from '../types';
 import { formatTime } from '../utils/timeUtils';
 import { filterAudioFiles } from '../utils/audioFormats';
 import { isTauri, selectAudioFiles, selectAudioDirectory, selectAudioDirectoryRecursive, filesToFileArray, filesToFilePaths } from '../utils/tauriFileAccess';
@@ -13,14 +13,16 @@ interface Props {
   currentTime: number;
   duration: number;
   volume: number;
-  playMode: PlayMode;
+  loopMode: LoopMode;
+  orderMode: OrderMode;
   playTimer: PlayTimer;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrev: () => void;
   onSeek: (time: number) => void;
   onSetVolume: (vol: number) => void;
-  onSetPlayMode: (mode: PlayMode) => void;
+  onSetLoopMode: (mode: LoopMode) => void;
+  onSetOrderMode: (mode: OrderMode) => void;
   onCreatePlaylist: (name: string) => void;
   onDeletePlaylist: (id: string) => void;
   onRenamePlaylist: (id: string, name: string) => void;
@@ -36,27 +38,12 @@ interface Props {
   onCancelPlayTimer: () => void;
 }
 
-const playModeIcons: Record<PlayMode, string> = {
-  sequential: '↻',
-  shuffle: '⤮',
-  'loop-list': '🔁',
-  'loop-single': '🔂',
-  single: '1️⃣',
-};
-
-const playModeLabels: Record<PlayMode, string> = {
-  sequential: '顺序播放',
-  shuffle: '随机播放',
-  'loop-list': '列表循环',
-  'loop-single': '单曲循环',
-  single: '单曲播放',
-};
-
-const modeOrder: PlayMode[] = ['sequential', 'loop-list', 'loop-single', 'shuffle', 'single'];
+const loopModeOrder: LoopMode[] = ['single', 'list', 'none'];
+const orderModeOrder: OrderMode[] = ['sequential', 'random'];
 
 export default function MusicPlayer({
-  playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, playMode, playTimer,
-  onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetPlayMode,
+  playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, loopMode, orderMode, playTimer,
+  onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetLoopMode, onSetOrderMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
   onAddTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
   onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
@@ -114,10 +101,15 @@ export default function MusicPlayer({
     if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
   }, [activePlaylistId, onAddTracks]);
 
-  const cyclePlayMode = useCallback(() => {
-    const idx = modeOrder.indexOf(playMode);
-    onSetPlayMode(modeOrder[(idx + 1) % modeOrder.length]);
-  }, [playMode, onSetPlayMode]);
+  const cycleLoopMode = useCallback(() => {
+    const idx = loopModeOrder.indexOf(loopMode);
+    onSetLoopMode(loopModeOrder[(idx + 1) % loopModeOrder.length]);
+  }, [loopMode, onSetLoopMode]);
+
+  const cycleOrderMode = useCallback(() => {
+    const idx = orderModeOrder.indexOf(orderMode);
+    onSetOrderMode(orderModeOrder[(idx + 1) % orderModeOrder.length]);
+  }, [orderMode, onSetOrderMode]);
 
   const toggleMute = useCallback(() => {
     if (isMuted) { onSetVolume(prevVolume); setIsMuted(false); }
@@ -278,8 +270,37 @@ export default function MusicPlayer({
       {/* 控制栏 */}
       <div className={styles.controls}>
         <div className={styles.controlsLeft}>
-          <button className={styles.modeBtn} onClick={cyclePlayMode} title={playModeLabels[playMode]}>
-            {playModeIcons[playMode]}
+          <button
+            className={`${styles.modeBtn} ${loopMode === 'none' ? styles.modeBtnInactive : ''}`}
+            onClick={cycleLoopMode}
+            title={loopMode === 'single' ? '单曲循环' : loopMode === 'list' ? '列表循环' : '不循环'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="17 1 21 5 17 9" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <polyline points="7 23 3 19 7 15" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+            {loopMode === 'single' && <span className={styles.modeBtnBadge}>1</span>}
+            {loopMode === 'none' && <span className={styles.modeBtnSlash}>/</span>}
+          </button>
+          <button
+            className={`${styles.modeBtn} ${orderMode === 'sequential' ? styles.modeBtnInactive : ''}`}
+            onClick={cycleOrderMode}
+            title={orderMode === 'sequential' ? '顺序播放' : '随机播放'}
+          >
+            {orderMode === 'random' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" />
+                <polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" />
+                <line x1="4" y1="4" x2="9" y2="9" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+            )}
           </button>
           {playTimer.active ? (
             <div className={styles.timerActive}>

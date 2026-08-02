@@ -303,14 +303,16 @@ function App() {
               currentTime={player.currentTime}
               duration={player.duration}
               volume={player.volume}
-              playMode={player.playMode}
+              loopMode={player.loopMode}
+              orderMode={player.orderMode}
               playTimer={player.playTimer}
               onTogglePlay={() => { ensureAnalyser(); player.togglePlay(); }}
               onNext={player.next}
               onPrev={player.prev}
               onSeek={player.seek}
               onSetVolume={player.setVolume}
-              onSetPlayMode={player.setPlayMode}
+              onSetLoopMode={player.setLoopMode}
+              onSetOrderMode={player.setOrderMode}
               onCreatePlaylist={player.createPlaylist}
               onDeletePlaylist={player.deletePlaylist}
               onRenamePlaylist={player.renamePlaylist}

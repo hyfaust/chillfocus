@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Track, Playlist, PlayMode, PlayTimer } from '../types';
+import type { Track, Playlist, PlayMode, LoopMode, OrderMode, PlayTimer } from '../types';
 import { generateId } from '../utils/timeUtils';
 import { saveAudioFile, getAudioFile, deleteAudioFile } from '../utils/audioStore';
 import { readFileAsBlobUrl } from '../utils/tauriFileAccess';
@@ -12,7 +12,8 @@ interface AudioPlayerState {
   currentTime: number;
   duration: number;
   volume: number;
-  playMode: PlayMode;
+  loopMode: LoopMode;
+  orderMode: OrderMode;
   shuffleOrder: number[];
   shuffleIndex: number;
   playTimer: PlayTimer;
@@ -34,13 +35,30 @@ function loadPlaylistsFromStorage(): Playlist[] {
   } catch { return []; }
 }
 
-function loadPrefsFromStorage(): { volume: number; playMode: PlayMode } {
+function loadPrefsFromStorage(): { volume: number; loopMode: LoopMode; orderMode: OrderMode } {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { volume: 0.7, playMode: 'sequential' };
+    if (!raw) return { volume: 0.7, loopMode: 'list', orderMode: 'sequential' };
     const data = JSON.parse(raw);
-    return { volume: data.volume ?? 0.7, playMode: data.playMode ?? 'sequential' };
-  } catch { return { volume: 0.7, playMode: 'sequential' }; }
+    const volume = data.volume ?? 0.7;
+    // Backward compatibility: convert old playMode to new loopMode + orderMode
+    if (data.loopMode && data.orderMode) {
+      return { volume, loopMode: data.loopMode, orderMode: data.orderMode };
+    }
+    const oldMode: PlayMode = data.playMode ?? 'sequential';
+    const mapped = mapOldPlayMode(oldMode);
+    return { volume, ...mapped };
+  } catch { return { volume: 0.7, loopMode: 'list', orderMode: 'sequential' }; }
+}
+
+function mapOldPlayMode(mode: PlayMode): { loopMode: LoopMode; orderMode: OrderMode } {
+  switch (mode) {
+    case 'sequential': return { loopMode: 'none', orderMode: 'sequential' };
+    case 'loop-list': return { loopMode: 'list', orderMode: 'sequential' };
+    case 'loop-single': return { loopMode: 'single', orderMode: 'sequential' };
+    case 'shuffle': return { loopMode: 'list', orderMode: 'random' };
+    case 'single': return { loopMode: 'none', orderMode: 'random' };
+  }
 }
 
 function savePlaylistsToStorage(playlists: Playlist[]) {
@@ -53,9 +71,9 @@ function savePlaylistsToStorage(playlists: Playlist[]) {
   } catch { /* quota exceeded */ }
 }
 
-function savePrefsToStorage(volume: number, playMode: PlayMode) {
+function savePrefsToStorage(volume: number, loopMode: LoopMode, orderMode: OrderMode) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ volume, playMode }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ volume, loopMode, orderMode }));
   } catch { /* */ }
 }
 
@@ -104,7 +122,8 @@ export function useAudioPlayer() {
       currentTime: 0,
       duration: 0,
       volume: prefs.volume,
-      playMode: prefs.playMode,
+      loopMode: prefs.loopMode,
+      orderMode: prefs.orderMode,
       shuffleOrder: [],
       shuffleIndex: 0,
       playTimer: { duration: 0, remaining: 0, waitForTrackEnd: false, active: false },
@@ -124,10 +143,10 @@ export function useAudioPlayer() {
     savePlaylistsToStorage(state.playlists);
   }, [state.playlists]);
 
-  // Persist volume and playMode
+  // Persist volume, loopMode, and orderMode
   useEffect(() => {
-    savePrefsToStorage(state.volume, state.playMode);
-  }, [state.volume, state.playMode]);
+    savePrefsToStorage(state.volume, state.loopMode, state.orderMode);
+  }, [state.volume, state.loopMode, state.orderMode]);
 
   // Persist current track/playlist state for session restoration
   useEffect(() => {
@@ -228,31 +247,37 @@ export function useAudioPlayer() {
     setState(prev => ({ ...prev, currentTrack: { ...track, url }, isPlaying: true, currentTime: 0 }));
   }, [getAudio, resolveTrackUrl]);
 
-  const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    // single/loop-single auto-advance: loop-single replays, single stops
-    // But for manual next/prev (called from next()/prev()), treat them like sequential
-    if (mode === 'shuffle') {
+  const getNextTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
+    if (orderMode === 'random') {
       let nextShuffleIdx = shuffleIdx + 1;
-      if (nextShuffleIdx >= shuffleOrd.length) nextShuffleIdx = 0;
+      if (nextShuffleIdx >= shuffleOrd.length) {
+        if (loopMode === 'list') nextShuffleIdx = 0;
+        else return { index: -1, newShuffleIdx: 0 };
+      }
       return { index: shuffleOrd[nextShuffleIdx], newShuffleIdx: nextShuffleIdx };
     }
+    // sequential
     const next = currentIndex + 1;
     if (next >= playlist.tracks.length) {
-      if (mode === 'loop-list') return { index: 0, newShuffleIdx: 0 };
+      if (loopMode === 'list') return { index: 0, newShuffleIdx: 0 };
       return { index: -1, newShuffleIdx: 0 };
     }
     return { index: next, newShuffleIdx: 0 };
   }, []);
 
-  const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, mode: PlayMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
-    if (mode === 'shuffle') {
+  const getPrevTrackIndex = useCallback((currentIndex: number, playlist: Playlist, loopMode: LoopMode, orderMode: OrderMode, shuffleIdx: number, shuffleOrd: number[]): { index: number; newShuffleIdx: number } => {
+    if (orderMode === 'random') {
       let prevShuffleIdx = shuffleIdx - 1;
-      if (prevShuffleIdx < 0) prevShuffleIdx = shuffleOrd.length - 1;
+      if (prevShuffleIdx < 0) {
+        if (loopMode === 'list') prevShuffleIdx = shuffleOrd.length - 1;
+        else return { index: 0, newShuffleIdx: 0 };
+      }
       return { index: shuffleOrd[prevShuffleIdx], newShuffleIdx: prevShuffleIdx };
     }
+    // sequential
     const prev = currentIndex - 1;
     if (prev < 0) {
-      if (mode === 'loop-list') return { index: playlist.tracks.length - 1, newShuffleIdx: 0 };
+      if (loopMode === 'list') return { index: playlist.tracks.length - 1, newShuffleIdx: 0 };
       return { index: 0, newShuffleIdx: 0 };
     }
     return { index: prev, newShuffleIdx: 0 };
@@ -267,14 +292,19 @@ export function useAudioPlayer() {
       const s = stateRef.current;
       const playlist = s.playlists.find(p => p.id === s.activePlaylistId);
       if (!playlist || !s.currentTrack) { setState(prev => ({ ...prev, isPlaying: false })); return; }
-      if (s.playMode === 'single') { setState(prev => ({ ...prev, isPlaying: false })); return; }
-      if (s.playMode === 'loop-single') {
+      // Single loop: replay
+      if (s.loopMode === 'single') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
         return;
       }
+      // None loop + random: stop after one random track
+      if (s.loopMode === 'none' && s.orderMode === 'random') {
+        setState(prev => ({ ...prev, isPlaying: false }));
+        return;
+      }
       const idx = playlist.tracks.findIndex(t => t.id === s.currentTrack!.id);
-      const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.playMode, s.shuffleIndex, s.shuffleOrder);
+      const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, s.loopMode, s.orderMode, s.shuffleIndex, s.shuffleOrder);
       if (nextIdx < 0 || nextIdx >= playlist.tracks.length) { setState(prev => ({ ...prev, isPlaying: false })); return; }
       const nextTrack = playlist.tracks[nextIdx];
       const url = await resolveTrackUrl(nextTrack);
@@ -298,8 +328,8 @@ export function useAudioPlayer() {
   // Set audio.loop for loop-single mode
   useEffect(() => {
     const audio = getAudio();
-    audio.loop = state.playMode === 'loop-single';
-  }, [state.playMode, getAudio]);
+    audio.loop = state.loopMode === 'single';
+  }, [state.loopMode, getAudio]);
 
   // Play timer
   useEffect(() => {
@@ -469,7 +499,7 @@ export function useAudioPlayer() {
       const playlist = prev.playlists.find(p => p.id === playlistId);
       let shuffleOrder = prev.shuffleOrder;
       let shuffleIndex = prev.shuffleIndex;
-      if (prev.playMode === 'shuffle' && playlist) {
+      if (prev.orderMode === 'random' && playlist) {
         shuffleOrder = generateShuffleOrder(playlist.tracks.length);
         const currentIdx = playlist.tracks.findIndex(t => t.id === track.id);
         const pos = shuffleOrder.indexOf(currentIdx);
@@ -513,12 +543,12 @@ export function useAudioPlayer() {
       return;
     }
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
-    const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
+    const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
     if (nextIdx >= 0 && nextIdx < playlist.tracks.length) {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[nextIdx]);
     }
-  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack, playSpecificTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack, playSpecificTrack]);
 
   const prev = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
@@ -529,23 +559,24 @@ export function useAudioPlayer() {
       return;
     }
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
-    const { index: prevIdx, newShuffleIdx } = getPrevTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
+    const { index: prevIdx, newShuffleIdx } = getPrevTrackIndex(idx, playlist, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder);
     if (prevIdx >= 0 && prevIdx < playlist.tracks.length) {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[prevIdx]);
     }
-  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack, playSpecificTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.loopMode, state.orderMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack, playSpecificTrack]);
 
   const seek = useCallback((time: number) => { getAudio().currentTime = time; setState(prev => ({ ...prev, currentTime: time })); }, [getAudio]);
 
   const setVolume = useCallback((vol: number) => { setState(prev => ({ ...prev, volume: Math.max(0, Math.min(1, vol)) })); }, []);
 
-  const setPlayMode = useCallback((mode: PlayMode) => {
+  const setLoopMode = useCallback((mode: LoopMode) => {
     setState(prev => {
       const playlist = prev.playlists.find(p => p.id === prev.activePlaylistId);
       let shuffleOrder = prev.shuffleOrder;
       let shuffleIndex = prev.shuffleIndex;
-      if (mode === 'shuffle' && playlist) {
+      // Re-shuffle when entering random mode
+      if (prev.orderMode === 'random' && playlist && (prev.orderMode !== 'random' || mode !== prev.loopMode)) {
         shuffleOrder = generateShuffleOrder(playlist.tracks.length);
         if (prev.currentTrack) {
           const currentIdx = playlist.tracks.findIndex(t => t.id === prev.currentTrack!.id);
@@ -553,15 +584,45 @@ export function useAudioPlayer() {
           if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
           shuffleIndex = 0;
         } else if (playlist.tracks.length > 0) {
-          // Seed shuffle with first track when no currentTrack
           const pos = shuffleOrder.indexOf(0);
           if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
           shuffleIndex = 0;
         }
       }
-      return { ...prev, playMode: mode, shuffleOrder, shuffleIndex };
+      return { ...prev, loopMode: mode, shuffleOrder, shuffleIndex };
     });
   }, [generateShuffleOrder]);
+
+  const setOrderMode = useCallback((mode: OrderMode) => {
+    setState(prev => {
+      const playlist = prev.playlists.find(p => p.id === prev.activePlaylistId);
+      let shuffleOrder = prev.shuffleOrder;
+      let shuffleIndex = prev.shuffleIndex;
+      if (mode === 'random' && playlist) {
+        shuffleOrder = generateShuffleOrder(playlist.tracks.length);
+        if (prev.currentTrack) {
+          const currentIdx = playlist.tracks.findIndex(t => t.id === prev.currentTrack!.id);
+          const pos = shuffleOrder.indexOf(currentIdx);
+          if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
+          shuffleIndex = 0;
+        } else if (playlist.tracks.length > 0) {
+          const pos = shuffleOrder.indexOf(0);
+          if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
+          shuffleIndex = 0;
+        }
+      }
+      return { ...prev, orderMode: mode, shuffleOrder, shuffleIndex };
+    });
+  }, [generateShuffleOrder]);
+
+  // Backward-compatible playMode getter for export/tray
+  const playMode: PlayMode = (() => {
+    if (state.loopMode === 'single') return 'loop-single';
+    if (state.loopMode === 'list' && state.orderMode === 'sequential') return 'loop-list';
+    if (state.loopMode === 'list' && state.orderMode === 'random') return 'shuffle';
+    if (state.loopMode === 'none' && state.orderMode === 'random') return 'single';
+    return 'sequential';
+  })();
 
   // Export/Import
   const sanitizeTrack = (t: Track): Track => ({
@@ -650,10 +711,10 @@ export function useAudioPlayer() {
   }, []);
 
   return {
-    ...state, audioRef, getAnalyser,
+    ...state, audioRef, getAnalyser, playMode,
     createPlaylist, deletePlaylist, renamePlaylist, setActivePlaylist,
     addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist,
-    play, pause, togglePlay, next, prev, seek, setVolume, setPlayMode,
+    play, pause, togglePlay, next, prev, seek, setVolume, setLoopMode, setOrderMode,
     playSpecificTrack, playTrack,
     exportPlaylist, exportPlaylists, importPlaylists, reassociateFiles,
     startPlayTimer, cancelPlayTimer,
