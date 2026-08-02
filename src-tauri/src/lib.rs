@@ -152,7 +152,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch, open_in_explorer])
+        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch, open_in_explorer, show_update_dialog])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -208,4 +208,19 @@ fn open_in_explorer(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn show_update_dialog(app: tauri::AppHandle, version: String, url: String) {
+    use tauri_plugin_dialog::DialogExt;
+    let msg = format!("发现新版本 v{}\n\n点击确定前往下载页面", version);
+    app.dialog()
+        .message(&msg)
+        .title("ChillFocus 更新")
+        .kind(tauri_plugin_dialog::MessageDialogKind::Info)
+        .blocking_show();
+    // Open the release URL in default browser
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", "start", "", &url])
+        .spawn();
 }
