@@ -149,7 +149,7 @@ export default function GlobalSettings({ onClose }: Props) {
     nextTrack: '下一首',
     volumeUp: '增大音量',
     volumeDown: '减小音量',
-    showWindow: '显示主界面',
+    showWindow: '显示/隐藏主界面',
   };
 
   const renderShortcutRow = (action: string, label: string, scope: 'local' | 'global', combo: string) => {
@@ -261,7 +261,7 @@ export default function GlobalSettings({ onClose }: Props) {
         <div className={styles.section}>
           <h4 className={styles.sectionTitle}>局部快捷键</h4>
           <p className={styles.sectionDesc}>应用内生效，点击按钮后按下新按键或组合键，点 × 清除</p>
-          {Object.entries(shortcutLabels).map(([action, label]) =>
+          {Object.entries(shortcutLabels).filter(([action]) => action !== 'showWindow').map(([action, label]) =>
             renderShortcutRow(action, label, 'local', settings.localShortcuts[action as keyof ShortcutConfig])
           )}
         </div>
