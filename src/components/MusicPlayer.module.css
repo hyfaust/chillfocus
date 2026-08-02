@@ -351,6 +351,11 @@
 .trackListWrap:hover {
 }
 
+.dragOver {
+  border: 2px dashed var(--accent);
+  background: rgba(124, 93, 250, 0.05);
+}
+
 .trackListHeader {
   display: flex;
   justify-content: space-between;

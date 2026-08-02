@@ -76,6 +76,7 @@ export default function MusicPlayer({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addUrl, setAddUrl] = useState('');
   const [addUrlName, setAddUrlName] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
   const [showTimerMenu, setShowTimerMenu] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(30);
   const [timerWaitForEnd, setTimerWaitForEnd] = useState(false);
@@ -108,6 +109,7 @@ export default function MusicPlayer({
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragOver(false);
     const files = filterAudioFiles(Array.from(e.dataTransfer.files));
     if (files.length && activePlaylistId) onAddTracks(activePlaylistId, files);
   }, [activePlaylistId, onAddTracks]);
@@ -335,7 +337,14 @@ export default function MusicPlayer({
       </div>
 
       {/* 曲目列表 */}
-      <div className={styles.trackListWrap} ref={trackListRef} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+      <div
+        className={`${styles.trackListWrap} ${isDragOver ? styles.dragOver : ''}`}
+        ref={trackListRef}
+        onDragEnter={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+        onDrop={handleDrop}
+      >
         <div className={styles.trackListHeader}>
           <span>{activePlaylist ? `${activePlaylist.tracks.length} 首曲目` : '选择播放列表'}</span>
           {hasUnresolvedTracks && (

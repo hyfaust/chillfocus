@@ -2,7 +2,7 @@
 .notesLayer {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 10;
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
