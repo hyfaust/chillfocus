@@ -20,6 +20,7 @@ interface AudioPlayerState {
 
 const STORAGE_KEY = 'chillfocus-playlists';
 const PREFS_KEY = 'chillfocus-player-prefs';
+const PLAYER_STATE_KEY = 'chillfocus-player-state';
 
 function loadPlaylistsFromStorage(): Playlist[] {
   try {
@@ -58,14 +59,47 @@ function savePrefsToStorage(volume: number, playMode: PlayMode) {
   } catch { /* */ }
 }
 
+function loadPlayerState(): { trackId: string; playlistId: string } | null {
+  try {
+    const raw = localStorage.getItem(PLAYER_STATE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data.trackId && data.playlistId) return data;
+    return null;
+  } catch { return null; }
+}
+
+function savePlayerState(trackId: string | null, playlistId: string | null) {
+  try {
+    if (trackId && playlistId) {
+      localStorage.setItem(PLAYER_STATE_KEY, JSON.stringify({ trackId, playlistId }));
+    }
+  } catch { /* */ }
+}
+
 export function useAudioPlayer() {
   const [state, setState] = useState<AudioPlayerState>(() => {
     const playlists = loadPlaylistsFromStorage();
     const prefs = loadPrefsFromStorage();
+    const savedState = loadPlayerState();
+
+    // Restore currentTrack and activePlaylistId from saved state
+    let activePlaylistId = playlists[0]?.id ?? null;
+    let currentTrack: Track | null = null;
+
+    if (savedState) {
+      const savedPlaylist = playlists.find(p => p.id === savedState.playlistId);
+      if (savedPlaylist) {
+        activePlaylistId = savedPlaylist.id;
+        const savedTrack = savedPlaylist.tracks.find(t => t.id === savedState.trackId);
+        if (savedTrack) currentTrack = savedTrack;
+      }
+    }
+
     return {
       playlists,
-      activePlaylistId: playlists[0]?.id ?? null,
-      currentTrack: null,
+      activePlaylistId,
+      currentTrack,
       isPlaying: false,
       currentTime: 0,
       duration: 0,
@@ -94,6 +128,21 @@ export function useAudioPlayer() {
   useEffect(() => {
     savePrefsToStorage(state.volume, state.playMode);
   }, [state.volume, state.playMode]);
+
+  // Persist current track/playlist state for session restoration
+  useEffect(() => {
+    savePlayerState(state.currentTrack?.id ?? null, state.activePlaylistId);
+  }, [state.currentTrack?.id, state.activePlaylistId]);
+
+  // Save state before window closes
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const s = stateRef.current;
+      savePlayerState(s.currentTrack?.id ?? null, s.activePlaylistId);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const getAudio = useCallback(() => {
     if (!audioRef.current) {
@@ -415,6 +464,23 @@ export function useAudioPlayer() {
     });
   }, []);
 
+  const playSpecificTrack = useCallback((playlistId: string, track: Track) => {
+    setState(prev => {
+      const playlist = prev.playlists.find(p => p.id === playlistId);
+      let shuffleOrder = prev.shuffleOrder;
+      let shuffleIndex = prev.shuffleIndex;
+      if (prev.playMode === 'shuffle' && playlist) {
+        shuffleOrder = generateShuffleOrder(playlist.tracks.length);
+        const currentIdx = playlist.tracks.findIndex(t => t.id === track.id);
+        const pos = shuffleOrder.indexOf(currentIdx);
+        if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
+        shuffleIndex = 0;
+      }
+      return { ...prev, activePlaylistId: playlistId, shuffleOrder, shuffleIndex };
+    });
+    playTrack(track);
+  }, [playTrack, generateShuffleOrder]);
+
   const play = useCallback(async () => {
     const audio = getAudio();
     if (state.currentTrack) {
@@ -430,9 +496,9 @@ export function useAudioPlayer() {
       setState(prev => ({ ...prev, isPlaying: true }));
     } else {
       const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
-      if (playlist && playlist.tracks.length > 0) playTrack(playlist.tracks[0]);
+      if (playlist && playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[0]);
     }
-  }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playTrack, resolveTrackUrl]);
+  }, [getAudio, state.currentTrack, state.playlists, state.activePlaylistId, playSpecificTrack, resolveTrackUrl]);
 
   const pause = useCallback(() => { getAudio().pause(); setState(prev => ({ ...prev, isPlaying: false })); }, [getAudio]);
 
@@ -440,25 +506,35 @@ export function useAudioPlayer() {
 
   const next = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
-    if (!playlist || !state.currentTrack) return;
+    if (!playlist) return;
+    // Fallback: if no currentTrack, start from first track
+    if (!state.currentTrack) {
+      if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[0]);
+      return;
+    }
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
     const { index: nextIdx, newShuffleIdx } = getNextTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
     if (nextIdx >= 0 && nextIdx < playlist.tracks.length) {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[nextIdx]);
     }
-  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getNextTrackIndex, playTrack, playSpecificTrack]);
 
   const prev = useCallback(async () => {
     const playlist = state.playlists.find(p => p.id === state.activePlaylistId);
-    if (!playlist || !state.currentTrack) return;
+    if (!playlist) return;
+    // Fallback: if no currentTrack, start from last track
+    if (!state.currentTrack) {
+      if (playlist.tracks.length > 0) playSpecificTrack(state.activePlaylistId!, playlist.tracks[playlist.tracks.length - 1]);
+      return;
+    }
     const idx = playlist.tracks.findIndex(t => t.id === state.currentTrack!.id);
     const { index: prevIdx, newShuffleIdx } = getPrevTrackIndex(idx, playlist, state.playMode, state.shuffleIndex, state.shuffleOrder);
     if (prevIdx >= 0 && prevIdx < playlist.tracks.length) {
       setState(prev => ({ ...prev, shuffleIndex: newShuffleIdx }));
       playTrack(playlist.tracks[prevIdx]);
     }
-  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack]);
+  }, [state.playlists, state.activePlaylistId, state.currentTrack, state.playMode, state.shuffleIndex, state.shuffleOrder, getPrevTrackIndex, playTrack, playSpecificTrack]);
 
   const seek = useCallback((time: number) => { getAudio().currentTime = time; setState(prev => ({ ...prev, currentTime: time })); }, [getAudio]);
 
@@ -476,28 +552,16 @@ export function useAudioPlayer() {
           const pos = shuffleOrder.indexOf(currentIdx);
           if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
           shuffleIndex = 0;
+        } else if (playlist.tracks.length > 0) {
+          // Seed shuffle with first track when no currentTrack
+          const pos = shuffleOrder.indexOf(0);
+          if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
+          shuffleIndex = 0;
         }
       }
       return { ...prev, playMode: mode, shuffleOrder, shuffleIndex };
     });
   }, [generateShuffleOrder]);
-
-  const playSpecificTrack = useCallback((playlistId: string, track: Track) => {
-    setState(prev => {
-      const playlist = prev.playlists.find(p => p.id === playlistId);
-      let shuffleOrder = prev.shuffleOrder;
-      let shuffleIndex = prev.shuffleIndex;
-      if (prev.playMode === 'shuffle' && playlist) {
-        shuffleOrder = generateShuffleOrder(playlist.tracks.length);
-        const currentIdx = playlist.tracks.findIndex(t => t.id === track.id);
-        const pos = shuffleOrder.indexOf(currentIdx);
-        if (pos > 0) [shuffleOrder[0], shuffleOrder[pos]] = [shuffleOrder[pos], shuffleOrder[0]];
-        shuffleIndex = 0;
-      }
-      return { ...prev, activePlaylistId: playlistId, shuffleOrder, shuffleIndex };
-    });
-    playTrack(track);
-  }, [playTrack, generateShuffleOrder]);
 
   // Export/Import
   const sanitizeTrack = (t: Track): Track => ({
