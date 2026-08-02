@@ -85,6 +85,8 @@ export default function AmbientSounds() {
   const soundsRef = useRef<Map<string, ActiveSound>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const restoredRef = useRef(false);
+  const pausedStateRef = useRef<{ ids: string[]; volumes: Record<string, number> } | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   // Persist custom sounds
   useEffect(() => { saveCustomSounds(customSounds); }, [customSounds]);
@@ -200,6 +202,42 @@ export default function AmbientSounds() {
     setCustomSounds(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  const togglePauseAll = useCallback(() => {
+    if (isPaused) {
+      // Resume: restore from saved state
+      if (pausedStateRef.current) {
+        const { ids, volumes: savedVolumes } = pausedStateRef.current;
+        const allSrcMap = new Map<string, string>();
+        PRESETS.forEach(p => allSrcMap.set(p.id, p.src));
+        customSounds.forEach(s => { if (s.url) allSrcMap.set(s.id, s.url); });
+        ids.forEach(id => {
+          const src = allSrcMap.get(id);
+          if (src && !soundsRef.current.has(id)) {
+            const audio = new Audio(src);
+            audio.loop = true;
+            audio.volume = savedVolumes[id] ?? 0.5;
+            const onEnded = () => { audio.currentTime = 0; audio.play().catch(() => {}); };
+            audio.addEventListener('ended', onEnded);
+            audio.play().catch(() => {});
+            soundsRef.current.set(id, { audio, volume: savedVolumes[id] ?? 0.5 });
+          }
+        });
+        pausedStateRef.current = null;
+      }
+      setIsPaused(false);
+    } else {
+      // Pause: save current state and stop all
+      const ids = Array.from(soundsRef.current.keys());
+      const savedVolumes: Record<string, number> = {};
+      soundsRef.current.forEach((s, id) => { savedVolumes[id] = s.volume; });
+      pausedStateRef.current = { ids, volumes: savedVolumes };
+      soundsRef.current.forEach(s => { s.audio.pause(); s.audio.currentTime = 0; });
+      soundsRef.current.clear();
+      setIsPaused(true);
+    }
+    setTick(t => t + 1);
+  }, [isPaused, customSounds]);
+
   useEffect(() => {
     return () => {
       soundsRef.current.forEach(s => { s.audio.pause(); s.audio.currentTime = 0; });
@@ -221,6 +259,13 @@ export default function AmbientSounds() {
           </svg>
           环境音
         </h3>
+        <button className={`${styles.addBtn} ${isPaused ? styles.pauseBtnActive : ''}`} onClick={togglePauseAll} title={isPaused ? '继续环境音' : '暂停所有环境音'}>
+          {isPaused ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+          )}
+        </button>
         <button className={styles.addBtn} onClick={() => setShowCustomForm(!showCustomForm)} title="添加自定义环境音">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         </button>

@@ -39,6 +39,12 @@
   color: var(--accent);
 }
 
+.pauseBtnActive {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
