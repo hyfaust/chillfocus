@@ -30,6 +30,7 @@ interface Props {
   onAddTracks: (playlistId: string, files: File[], paths?: string[]) => void;
   onAddUrlTrack: (playlistId: string, url: string, name?: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
+  onCopyTrackToPlaylist: (track: Track, targetPlaylistId: string) => void;
   onPlayTrack: (playlistId: string, track: Track) => void;
   onExportPlaylists: (ids: string[]) => void;
   onImportPlaylists: (file: File) => void;
@@ -45,7 +46,7 @@ export default function MusicPlayer({
   playlists, activePlaylistId, currentTrack, isPlaying, currentTime, duration, volume, loopMode, orderMode, playTimer,
   onTogglePlay, onNext, onPrev, onSeek, onSetVolume, onSetLoopMode, onSetOrderMode,
   onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onSetActivePlaylist,
-  onAddTracks, onAddUrlTrack, onRemoveTrack, onPlayTrack,
+  onAddTracks, onAddUrlTrack, onRemoveTrack, onCopyTrackToPlaylist, onPlayTrack,
   onExportPlaylists, onImportPlaylists, onReassociateFiles, onStartPlayTimer, onCancelPlayTimer,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +69,76 @@ export default function MusicPlayer({
   const [timerMinutes, setTimerMinutes] = useState(30);
   const [timerWaitForEnd, setTimerWaitForEnd] = useState(false);
 
+  // View mode: normal, star, or all
+  type ViewMode = 'normal' | 'star' | 'all';
+  const [viewMode, setViewMode] = useState<ViewMode>('normal');
+  const [previousPlaylistId, setPreviousPlaylistId] = useState<string | null>(null);
+
+  // Context menu state
+  interface ContextMenuState {
+    type: 'track' | 'tab';
+    x: number;
+    y: number;
+    targetId: string;
+  }
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
   const activePlaylist = playlists.find(p => p.id === activePlaylistId);
+  const starPlaylist = playlists.find(p => p.id === 'star');
+
+  // Compute displayed tracks based on view mode
+  const displayedTracks = (() => {
+    if (viewMode === 'star') return starPlaylist?.tracks ?? [];
+    if (viewMode === 'all') {
+      const seen = new Set<string>();
+      const result: Track[] = [];
+      for (const p of playlists) {
+        for (const t of p.tracks) {
+          const key = t.sourceFileName || t.name;
+          if (!seen.has(key)) {
+            seen.add(key);
+            result.push(t);
+          }
+        }
+      }
+      return result;
+    }
+    return activePlaylist?.tracks ?? [];
+  })();
+
+  // View mode toggle handlers
+  const toggleStarView = useCallback(() => {
+    if (viewMode === 'star') {
+      setViewMode('normal');
+      if (previousPlaylistId) onSetActivePlaylist(previousPlaylistId);
+    } else {
+      setPreviousPlaylistId(activePlaylistId);
+      setViewMode('star');
+    }
+  }, [viewMode, previousPlaylistId, activePlaylistId, onSetActivePlaylist]);
+
+  const toggleAllView = useCallback(() => {
+    if (viewMode === 'all') {
+      setViewMode('normal');
+      if (previousPlaylistId) onSetActivePlaylist(previousPlaylistId);
+    } else {
+      setPreviousPlaylistId(activePlaylistId);
+      setViewMode('all');
+    }
+  }, [viewMode, previousPlaylistId, activePlaylistId, onSetActivePlaylist]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [contextMenu]);
 
   const handleFileSelect = useCallback(async (e?: React.ChangeEvent<HTMLInputElement>) => {
     // Tauri: use native file dialog, pass both files and paths
@@ -195,6 +265,16 @@ export default function MusicPlayer({
           音乐播放器
         </h3>
         <div className={styles.headerActions}>
+          <button className={`${styles.headerBtn} ${viewMode === 'star' ? styles.viewBtnActive : ''}`} onClick={toggleStarView} title="收藏列表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={viewMode === 'star' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </button>
+          <button className={`${styles.headerBtn} ${viewMode === 'all' ? styles.viewBtnActive : ''}`} onClick={toggleAllView} title="所有音乐">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+          </button>
           <button className={styles.headerBtn} onClick={() => importFileRef.current?.click()} title="导入播放列表">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
           </button>
@@ -222,7 +302,7 @@ export default function MusicPlayer({
 
       {/* 播放列表选择 */}
       <div className={styles.playlistTabs}>
-        {playlists.map(p => (
+        {playlists.filter(p => p.id !== 'star').map(p => (
           <div key={p.id} className={styles.playlistTabWrapper}>
             {editingPlaylistId === p.id ? (
               <input className={styles.playlistEditInput} value={editName}
@@ -231,8 +311,8 @@ export default function MusicPlayer({
                 onKeyDown={e => { if (e.key === 'Enter') { if (editName.trim()) onRenamePlaylist(p.id, editName.trim()); setEditingPlaylistId(null); } }}
                 autoFocus />
             ) : (
-              <button className={`${styles.playlistTab} ${p.id === activePlaylistId ? styles.playlistTabActive : ''}`}
-                onClick={() => onSetActivePlaylist(p.id)}
+              <button className={`${styles.playlistTab} ${p.id === activePlaylistId && viewMode === 'normal' ? styles.playlistTabActive : ''}`}
+                onClick={() => { onSetActivePlaylist(p.id); setViewMode('normal'); }}
                 onDoubleClick={() => { setEditingPlaylistId(p.id); setEditName(p.name); }}>
                 {p.name}
               </button>
@@ -367,14 +447,19 @@ export default function MusicPlayer({
         onDrop={handleDrop}
       >
         <div className={styles.trackListHeader}>
-          <span>{activePlaylist ? `${activePlaylist.tracks.length} 首曲目` : '选择播放列表'}</span>
-          {hasUnresolvedTracks && (
+          <span>
+            {viewMode === 'star' ? `★ 收藏 · ${displayedTracks.length} 首曲目` :
+             viewMode === 'all' ? `所有音乐 · ${displayedTracks.length} 首曲目` :
+             activePlaylist ? `${activePlaylist.tracks.length} 首曲目` : '选择播放列表'}
+          </span>
+          {viewMode === 'normal' && hasUnresolvedTracks && (
             <button className={styles.reassociateBtn} onClick={() => reassociateInputRef.current?.click()}>
               📂 重新关联文件
             </button>
           )}
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <input ref={reassociateInputRef} type="file" {...({ webkitdirectory: '' } as any)} style={{ display: 'none' }} onChange={handleReassociateFile} />
+          {viewMode !== 'all' && (
           <div className={styles.addMusicWrap}>
             <button className={styles.uploadBtn} onClick={() => setShowAddMenu(!showAddMenu)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
@@ -398,31 +483,75 @@ export default function MusicPlayer({
             )}
             <input ref={fileInputRef} type="file" accept="audio/*" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
           </div>
+          )}
         </div>
 
         <ul className={styles.trackList}>
-          {activePlaylist?.tracks.map((track, i) => (
-            <li key={track.id}
+          {displayedTracks.map((track, i) => (
+            <li key={`${viewMode}-${track.id}`}
               className={`${styles.trackItem} ${currentTrack?.id === track.id ? styles.trackItemActive : ''}`}
-              onClick={() => onPlayTrack(activePlaylist.id, track)}>
+              onClick={() => {
+                const pid = viewMode === 'star' ? 'star' : viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id ?? activePlaylistId : activePlaylistId;
+                if (pid) onPlayTrack(pid, track);
+              }}
+              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'track', x: e.clientX, y: e.clientY, targetId: track.id }); }}
+            >
               <span className={styles.trackIndex}>{currentTrack?.id === track.id && isPlaying ? '♪' : i + 1}</span>
               <span className={styles.trackItemName}>{track.name}</span>
               <span className={styles.trackItemDuration}>{track.duration ? formatTime(Math.floor(track.duration)) : '--:--'}</span>
-              <button className={styles.removeBtn} onClick={(e) => { e.stopPropagation(); onRemoveTrack(activePlaylist.id, track.id); }}>
+              {viewMode !== 'all' && (
+              <button className={styles.removeBtn} onClick={(e) => { e.stopPropagation(); const pid = viewMode === 'star' ? 'star' : activePlaylistId; if (pid) onRemoveTrack(pid, track.id); }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
+              )}
             </li>
           ))}
         </ul>
-        {(!activePlaylist || activePlaylist.tracks.length === 0) && (
-          <div className={styles.empty}>拖拽音频文件到此处，或点击「添加音乐」</div>
+        {displayedTracks.length === 0 && (
+          <div className={styles.empty}>
+            {viewMode === 'all' ? '暂无曲目' : '拖拽音频文件到此处，或点击「添加音乐」'}
+          </div>
         )}
-        {activePlaylist && activePlaylist.tracks.length > 5 && (
+        {displayedTracks.length > 5 && (
           <button className={styles.backToTopBtn} onClick={() => trackListRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} title="回到顶部">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
           </button>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div ref={contextMenuRef} className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {contextMenu.type === 'track' && (() => {
+            const trackId = contextMenu.targetId;
+            const track = displayedTracks.find(t => t.id === trackId);
+            if (!track) return null;
+            const isStarred = starPlaylist?.tracks.some(t => (t.sourceFileName || t.name) === (track.sourceFileName || track.name));
+            return <>
+              <button className={styles.contextMenuItem} onClick={() => {
+                if (!starPlaylist) return;
+                if (isStarred) {
+                  const starTrack = starPlaylist.tracks.find(t => (t.sourceFileName || t.name) === (track.sourceFileName || track.name));
+                  if (starTrack) onRemoveTrack('star', starTrack.id);
+                } else {
+                  onCopyTrackToPlaylist(track, 'star');
+                }
+                setContextMenu(null);
+              }}>
+                {isStarred ? '从收藏移除' : '添加到收藏'}
+              </button>
+              <div className={styles.contextDivider} />
+              <button className={styles.contextMenuItem} onClick={() => {
+                const pid = viewMode === 'all' ? playlists.find(p => p.tracks.some(t => t.sourceFileName === track.sourceFileName && t.name === track.name))?.id : (viewMode === 'star' ? 'star' : activePlaylistId);
+                if (pid) onRemoveTrack(pid, track.id);
+                setContextMenu(null);
+              }}>
+                {viewMode === 'all' ? '从源列表删除' : '从当前列表删除'}
+              </button>
+            </>;
+          })()}
+        </div>
+      )}
     </div>
   );
 }

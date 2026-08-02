@@ -44,6 +44,48 @@
   color: var(--accent);
 }
 
+.viewBtnActive {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 93, 250, 0.1);
+}
+
+/* Context Menu */
+.contextMenu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  background: #1e1e32;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.contextMenuItem:hover {
+  background: rgba(124, 93, 250, 0.15);
+}
+
+.contextDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 .playlistTabs {
   display: flex;
   gap: 4px;

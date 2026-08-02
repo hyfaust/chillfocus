@@ -320,6 +320,7 @@ function App() {
               onAddTracks={player.addTracksToPlaylist}
               onAddUrlTrack={player.addUrlTrackToPlaylist}
               onRemoveTrack={player.removeTrackFromPlaylist}
+              onCopyTrackToPlaylist={player.copyTrackToPlaylist}
               onPlayTrack={(plId, track) => { ensureAnalyser(); player.playSpecificTrack(plId, track); }}
               onExportPlaylists={player.exportPlaylists}
               onImportPlaylists={player.importPlaylists}

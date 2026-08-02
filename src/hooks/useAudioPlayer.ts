@@ -26,13 +26,20 @@ const PLAYER_STATE_KEY = 'chillfocus-player-state';
 function loadPlaylistsFromStorage(): Playlist[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data.map((p: Playlist) => ({
-      ...p,
-      tracks: p.tracks.map((t: Track) => ({ ...t, url: '' })),
-    })) : [];
-  } catch { return []; }
+    let playlists: Playlist[] = [];
+    if (raw) {
+      const data = JSON.parse(raw);
+      playlists = Array.isArray(data) ? data.map((p: Playlist) => ({
+        ...p,
+        tracks: p.tracks.map((t: Track) => ({ ...t, url: '' })),
+      })) : [];
+    }
+    // Ensure Star playlist always exists
+    if (!playlists.find(p => p.id === 'star')) {
+      playlists.unshift({ id: 'star', name: '收藏', tracks: [] });
+    }
+    return playlists;
+  } catch { return [{ id: 'star', name: '收藏', tracks: [] }]; }
 }
 
 function loadPrefsFromStorage(): { volume: number; loopMode: LoopMode; orderMode: OrderMode } {
@@ -361,6 +368,7 @@ export function useAudioPlayer() {
   }, []);
 
   const deletePlaylist = useCallback((id: string) => {
+    if (id === 'star') return; // Star playlist cannot be deleted
     setState(prev => {
       const playlists = prev.playlists.filter(p => p.id !== id);
       // Clean up IndexedDB files for deleted playlist
@@ -376,6 +384,20 @@ export function useAudioPlayer() {
 
   const setActivePlaylist = useCallback((id: string) => {
     setState(prev => ({ ...prev, activePlaylistId: id }));
+  }, []);
+
+  const copyTrackToPlaylist = useCallback((track: Track, targetPlaylistId: string) => {
+    const newTrack: Track = {
+      ...track,
+      id: generateId(),
+      url: '', // Will be resolved on play
+    };
+    setState(prev => ({
+      ...prev,
+      playlists: prev.playlists.map(p =>
+        p.id === targetPlaylistId ? { ...p, tracks: [...p.tracks, newTrack] } : p
+      ),
+    }));
   }, []);
 
   const addTracksToPlaylist = useCallback((playlistId: string, files: File[], paths?: string[]) => {
@@ -713,7 +735,7 @@ export function useAudioPlayer() {
   return {
     ...state, audioRef, getAnalyser, playMode,
     createPlaylist, deletePlaylist, renamePlaylist, setActivePlaylist,
-    addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist,
+    addTracksToPlaylist, addUrlTrackToPlaylist, addLocalTracksToPlaylist, removeTrackFromPlaylist, copyTrackToPlaylist,
     play, pause, togglePlay, next, prev, seek, setVolume, setLoopMode, setOrderMode,
     playSpecificTrack, playTrack,
     exportPlaylist, exportPlaylists, importPlaylists, reassociateFiles,
