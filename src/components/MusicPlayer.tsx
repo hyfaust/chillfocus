@@ -595,10 +595,8 @@ export default function MusicPlayer({
                   const dir = filePath.replace(/[/\\][^/\\]+$/, '');
                   try {
                     if (await isTauri()) {
-                      const { open } = await import('@tauri-apps/plugin-shell');
-                      // Convert Windows path to file:// URI for shell.open
-                      const uri = 'file:///' + dir.replace(/\\/g, '/');
-                      await open(uri);
+                      const { invoke } = await import('@tauri-apps/api/core');
+                      await invoke('open_in_explorer', { path: dir });
                     }
                   } catch { /* ignore */ }
                   setContextMenu(null);

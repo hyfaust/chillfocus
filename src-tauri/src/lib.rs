@@ -110,7 +110,7 @@ pub fn run() {
             Ok(())
         })
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch])
+        .invoke_handler(tauri::generate_handler![set_minimize_to_tray, force_quit, set_autostart_flag, is_autostart_launch, open_in_explorer])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -157,4 +157,13 @@ fn set_autostart_flag(enable: bool) {
 #[tauri::command]
 fn is_autostart_launch() -> bool {
     std::env::args().any(|arg| arg == "--autostart")
+}
+
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
