@@ -7,9 +7,18 @@ export interface ShortcutConfig {
   togglePomodoro: string;
   toggleMusic: string;
   nextTrack: string;
+  prevTrack: string;
   volumeUp: string;
   volumeDown: string;
   showWindow: string;
+  toggleAmbient: string;
+  skipPomodoro: string;
+  resetPomodoro: string;
+  setModeSequential: string;
+  setModeLoopList: string;
+  setModeLoopSingle: string;
+  setModeShuffle: string;
+  setModeSingle: string;
 }
 
 export interface GlobalSettingsData {
@@ -23,21 +32,17 @@ export interface GlobalSettingsData {
 }
 
 const EMPTY_SHORTCUTS: ShortcutConfig = {
-  togglePomodoro: '',
-  toggleMusic: '',
-  nextTrack: '',
-  volumeUp: '',
-  volumeDown: '',
-  showWindow: '',
+  togglePomodoro: '', toggleMusic: '', nextTrack: '', prevTrack: '',
+  volumeUp: '', volumeDown: '', showWindow: '', toggleAmbient: '',
+  skipPomodoro: '', resetPomodoro: '',
+  setModeSequential: '', setModeLoopList: '', setModeLoopSingle: '', setModeShuffle: '', setModeSingle: '',
 };
 
 const DEFAULT_LOCAL_SHORTCUTS: ShortcutConfig = {
-  togglePomodoro: 'Space',
-  toggleMusic: 'm',
-  nextTrack: 'n',
-  volumeUp: 'ArrowUp',
-  volumeDown: 'ArrowDown',
-  showWindow: '',
+  togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', prevTrack: 'p',
+  volumeUp: 'ArrowUp', volumeDown: 'ArrowDown', showWindow: '', toggleAmbient: 'b',
+  skipPomodoro: '', resetPomodoro: '',
+  setModeSequential: '', setModeLoopList: '', setModeLoopSingle: '', setModeShuffle: '', setModeSingle: '',
 };
 
 const DEFAULT_SETTINGS: GlobalSettingsData = {
@@ -67,16 +72,44 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.join('+');
 }
 
+const shortcutLabels: Record<keyof ShortcutConfig, string> = {
+  togglePomodoro: '暂停/继续番茄钟',
+  toggleMusic: '暂停/继续音乐',
+  nextTrack: '下一首',
+  prevTrack: '上一首',
+  volumeUp: '增大音量',
+  volumeDown: '减小音量',
+  showWindow: '显示/隐藏主界面',
+  toggleAmbient: '暂停/继续环境音',
+  skipPomodoro: '跳过番茄钟',
+  resetPomodoro: '重置番茄钟',
+  setModeSequential: '切换-顺序播放',
+  setModeLoopList: '切换-列表循环',
+  setModeLoopSingle: '切换-单曲循环',
+  setModeShuffle: '切换-随机播放',
+  setModeSingle: '切换-单曲播放',
+};
+
+// Default visible actions (always shown)
+const defaultActions: (keyof ShortcutConfig)[] = [
+  'togglePomodoro', 'toggleMusic', 'nextTrack', 'volumeUp', 'volumeDown', 'showWindow',
+];
+
+// Actions that can be added via "+"
+const addableActions: (keyof ShortcutConfig)[] = [
+  'prevTrack', 'toggleAmbient', 'skipPomodoro', 'resetPomodoro',
+  'setModeSequential', 'setModeLoopList', 'setModeLoopSingle', 'setModeShuffle', 'setModeSingle',
+];
+
 export default function GlobalSettings({ onClose }: Props) {
   const [settings, setSettings] = useLocalStorage<GlobalSettingsData>('chillfocus-global-settings', DEFAULT_SETTINGS);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [addedActions, setAddedActions] = useState<(keyof ShortcutConfig)[]>([]);
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
-  useEffect(() => {
-    isTauri().then(setIsTauriEnv);
-  }, []);
+  useEffect(() => { isTauri().then(setIsTauriEnv); }, []);
 
-  // Apply minimizeToTray to Tauri backend
   useEffect(() => {
     if (!isTauriEnv) return;
     import('@tauri-apps/api/core').then(({ invoke }) => {
@@ -84,7 +117,6 @@ export default function GlobalSettings({ onClose }: Props) {
     });
   }, [settings.minimizeToTray, isTauriEnv]);
 
-  // Apply launchAtStartup via autostart plugin
   useEffect(() => {
     if (!isTauriEnv) return;
     import('@tauri-apps/plugin-autostart').then(({ enable, disable }) => {
@@ -98,7 +130,6 @@ export default function GlobalSettings({ onClose }: Props) {
     });
   }, [settings.launchAtStartup, isTauriEnv]);
 
-  // Notify App when global shortcuts change
   useEffect(() => {
     window.dispatchEvent(new Event('chillfocus-shortcuts-changed'));
   }, [settings.globalShortcuts, settings.globalShortcutsEnabled]);
@@ -127,9 +158,13 @@ export default function GlobalSettings({ onClose }: Props) {
   const handleKeyCapture = (action: string, scope: 'local' | 'global', e: React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Escape cancels editing
     if (e.key === 'Escape') { setEditingKey(null); return; }
-    // Ignore modifier-only keys — wait for the actual key in the combo
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, '');
+      else updateGlobalShortcut(action as keyof ShortcutConfig, '');
+      setEditingKey(null);
+      return;
+    }
     if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
     const combo = formatKeyCombo(e.nativeEvent);
     if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, combo);
@@ -137,40 +172,47 @@ export default function GlobalSettings({ onClose }: Props) {
     setEditingKey(null);
   };
 
-  const clearShortcut = (action: string, scope: 'local' | 'global') => {
-    if (scope === 'local') updateLocalShortcut(action as keyof ShortcutConfig, '');
-    else updateGlobalShortcut(action as keyof ShortcutConfig, '');
-    setEditingKey(null);
-  };
+  const visibleActions = [...defaultActions, ...addedActions];
+  const remainingAddable = addableActions.filter(a => !addedActions.includes(a));
 
-  const shortcutLabels: Record<keyof ShortcutConfig, string> = {
-    togglePomodoro: '暂停/继续番茄钟',
-    toggleMusic: '暂停/继续音乐',
-    nextTrack: '下一首',
-    volumeUp: '增大音量',
-    volumeDown: '减小音量',
-    showWindow: '显示/隐藏主界面',
-  };
+  const renderShortcutRow = (action: keyof ShortcutConfig) => {
+    const label = shortcutLabels[action];
+    const localCombo = settings.localShortcuts[action];
+    const globalCombo = settings.globalShortcuts[action];
+    const localEditId = `local-${action}`;
+    const globalEditId = `global-${action}`;
+    const isLocalEditing = editingKey === localEditId;
+    const isGlobalEditing = editingKey === globalEditId;
+    const isShowWindow = action === 'showWindow';
 
-  const renderShortcutRow = (action: string, label: string, scope: 'local' | 'global', combo: string) => {
-    const editId = `${scope}-${action}`;
-    const isEditing = editingKey === editId;
     return (
       <div key={action} className={styles.shortcutRow}>
         <span className={styles.shortcutLabel}>{label}</span>
         <div className={styles.shortcutBtns}>
+          {isShowWindow ? (
+            <span className={styles.shortcutPlaceholder}>\</span>
+          ) : (
+            <button
+              className={`${styles.shortcutKey} ${isLocalEditing ? styles.shortcutKeyEditing : ''}`}
+              onClick={() => setEditingKey(localEditId)}
+              onKeyDown={isLocalEditing ? (e) => handleKeyCapture(action, 'local', e) : undefined}
+              onBlur={() => { if (isLocalEditing) setEditingKey(null); }}
+              tabIndex={0}
+            >
+              {isLocalEditing ? '按下按键...' : localCombo || '未设置'}
+            </button>
+          )}
+        </div>
+        <div className={styles.shortcutBtns}>
           <button
-            className={`${styles.shortcutKey} ${isEditing ? styles.shortcutKeyEditing : ''}`}
-            onClick={() => setEditingKey(editId)}
-            onKeyDown={isEditing ? (e) => handleKeyCapture(action, scope, e) : undefined}
-            onBlur={() => { if (isEditing) setEditingKey(null); }}
+            className={`${styles.shortcutKey} ${isGlobalEditing ? styles.shortcutKeyEditing : ''}`}
+            onClick={() => setEditingKey(globalEditId)}
+            onKeyDown={isGlobalEditing ? (e) => handleKeyCapture(action, 'global', e) : undefined}
+            onBlur={() => { if (isGlobalEditing) setEditingKey(null); }}
             tabIndex={0}
           >
-            {isEditing ? '按下按键...' : combo || '未设置'}
+            {isGlobalEditing ? '按下按键...' : globalCombo || '未设置'}
           </button>
-          {combo && (
-            <button className={styles.shortcutClear} onClick={() => clearShortcut(action, scope)} title="清除">×</button>
-          )}
         </div>
       </div>
     );
@@ -184,7 +226,6 @@ export default function GlobalSettings({ onClose }: Props) {
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
 
-        {/* Minimize to tray */}
         {isTauriEnv && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
@@ -192,17 +233,13 @@ export default function GlobalSettings({ onClose }: Props) {
                 <span className={styles.toggleTitle}>关闭时最小化到托盘</span>
                 <span className={styles.toggleDesc}>点击关闭按钮隐藏到系统托盘而非退出</span>
               </div>
-              <button
-                className={`${styles.toggle} ${settings.minimizeToTray ? styles.toggleOn : ''}`}
-                onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
-              >
+              <button className={`${styles.toggle} ${settings.minimizeToTray ? styles.toggleOn : ''}`} onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}>
                 <span className={styles.toggleKnob} />
               </button>
             </div>
           </div>
         )}
 
-        {/* Save window size */}
         {isTauriEnv && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
@@ -210,17 +247,13 @@ export default function GlobalSettings({ onClose }: Props) {
                 <span className={styles.toggleTitle}>记住窗口大小和位置</span>
                 <span className={styles.toggleDesc}>下次启动时恢复上次关闭时的窗口大小和位置</span>
               </div>
-              <button
-                className={`${styles.toggle} ${settings.saveWindowSize ? styles.toggleOn : ''}`}
-                onClick={() => updateSetting('saveWindowSize', !settings.saveWindowSize)}
-              >
+              <button className={`${styles.toggle} ${settings.saveWindowSize ? styles.toggleOn : ''}`} onClick={() => updateSetting('saveWindowSize', !settings.saveWindowSize)}>
                 <span className={styles.toggleKnob} />
               </button>
             </div>
           </div>
         )}
 
-        {/* Launch at startup */}
         {isTauriEnv && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
@@ -228,10 +261,7 @@ export default function GlobalSettings({ onClose }: Props) {
                 <span className={styles.toggleTitle}>开机自启动</span>
                 <span className={styles.toggleDesc}>系统登录时自动启动 ChillFocus</span>
               </div>
-              <button
-                className={`${styles.toggle} ${settings.launchAtStartup ? styles.toggleOn : ''}`}
-                onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}
-              >
+              <button className={`${styles.toggle} ${settings.launchAtStartup ? styles.toggleOn : ''}`} onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}>
                 <span className={styles.toggleKnob} />
               </button>
             </div>
@@ -241,10 +271,7 @@ export default function GlobalSettings({ onClose }: Props) {
                   <span className={styles.toggleTitle} style={{ fontSize: 13, opacity: 0.8 }}>↳ 启动时隐藏到托盘</span>
                   <span className={styles.toggleDesc}>自启动后不显示窗口，直接最小化到系统托盘</span>
                 </div>
-                <button
-                  className={`${styles.toggle} ${settings.startMinimizedToTray ? styles.toggleOn : ''}`}
-                  onClick={() => updateSetting('startMinimizedToTray', !settings.startMinimizedToTray)}
-                >
+                <button className={`${styles.toggle} ${settings.startMinimizedToTray ? styles.toggleOn : ''}`} onClick={() => updateSetting('startMinimizedToTray', !settings.startMinimizedToTray)}>
                   <span className={styles.toggleKnob} />
                 </button>
               </div>
@@ -252,40 +279,52 @@ export default function GlobalSettings({ onClose }: Props) {
           </div>
         )}
 
-        {/* Force quit */}
         <div className={styles.section}>
           <button className={styles.quitBtn} onClick={handleForceQuit}>退出程序</button>
         </div>
 
-        {/* Local shortcuts */}
+        {/* Merged shortcuts section */}
         <div className={styles.section}>
-          <h4 className={styles.sectionTitle}>局部快捷键</h4>
-          <p className={styles.sectionDesc}>应用内生效，点击按钮后按下新按键或组合键，点 × 清除</p>
-          {Object.entries(shortcutLabels).filter(([action]) => action !== 'showWindow').map(([action, label]) =>
-            renderShortcutRow(action, label, 'local', settings.localShortcuts[action as keyof ShortcutConfig])
-          )}
-        </div>
-
-        {/* Global shortcuts */}
-        {isTauriEnv && (
-          <div className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <h4 className={styles.sectionTitle}>全局快捷键</h4>
-                <p className={styles.sectionDesc}>系统级生效，需手动启用</p>
-              </div>
-              <button
-                className={`${styles.toggle} ${settings.globalShortcutsEnabled ? styles.toggleOn : ''}`}
-                onClick={() => updateSetting('globalShortcutsEnabled', !settings.globalShortcutsEnabled)}
-              >
-                <span className={styles.toggleKnob} />
-              </button>
+          <div className={styles.sectionHeader}>
+            <h4 className={styles.sectionTitle}>快捷键</h4>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {remainingAddable.length > 0 && (
+                <div style={{ position: 'relative' }}>
+                  <button className={styles.shortcutAddBtn} onClick={() => setShowAddMenu(!showAddMenu)} title="添加快捷键">+</button>
+                  {showAddMenu && (
+                    <div className={styles.addMenu}>
+                      {remainingAddable.map(action => (
+                        <button key={action} className={styles.addMenuItem} onClick={() => {
+                          setAddedActions(prev => [...prev, action]);
+                          setShowAddMenu(false);
+                        }}>
+                          {shortcutLabels[action]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {isTauriEnv && (
+                <button
+                  className={`${styles.toggle} ${settings.globalShortcutsEnabled ? styles.toggleOn : ''}`}
+                  onClick={() => updateSetting('globalShortcutsEnabled', !settings.globalShortcutsEnabled)}
+                  title="全局快捷键开关"
+                >
+                  <span className={styles.toggleKnob} />
+                </button>
+              )}
             </div>
-            {settings.globalShortcutsEnabled && Object.entries(shortcutLabels).map(([action, label]) =>
-              renderShortcutRow(action, label, 'global', settings.globalShortcuts[action as keyof ShortcutConfig])
-            )}
           </div>
-        )}
+          <p className={styles.sectionDesc}>点击按钮后按下新按键或组合键，按 Delete 清除</p>
+          {/* Column headers */}
+          <div className={styles.shortcutRow} style={{ opacity: 0.5, fontSize: 11 }}>
+            <span className={styles.shortcutLabel}>功能</span>
+            <div className={styles.shortcutBtns}>局部</div>
+            <div className={styles.shortcutBtns}>全局</div>
+          </div>
+          {visibleActions.map(action => renderShortcutRow(action))}
+        </div>
       </div>
     </div>
   );

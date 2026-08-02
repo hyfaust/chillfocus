@@ -23,8 +23,18 @@ function loadShortcuts(): { local: ShortcutConfig; global: ShortcutConfig; globa
 }
 
 const isTauriEnv = () => !!(window as any).__TAURI_INTERNALS__;
-const EMPTY_SHORTCUTS: ShortcutConfig = { togglePomodoro: '', toggleMusic: '', nextTrack: '', volumeUp: '', volumeDown: '', showWindow: '' };
-const DEFAULT_LOCAL: ShortcutConfig = { togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', volumeUp: 'ArrowUp', volumeDown: 'ArrowDown', showWindow: '' };
+const EMPTY_SHORTCUTS: ShortcutConfig = {
+  togglePomodoro: '', toggleMusic: '', nextTrack: '', prevTrack: '',
+  volumeUp: '', volumeDown: '', showWindow: '', toggleAmbient: '',
+  skipPomodoro: '', resetPomodoro: '',
+  setModeSequential: '', setModeLoopList: '', setModeLoopSingle: '', setModeShuffle: '', setModeSingle: '',
+};
+const DEFAULT_LOCAL: ShortcutConfig = {
+  togglePomodoro: 'Space', toggleMusic: 'm', nextTrack: 'n', prevTrack: 'p',
+  volumeUp: 'ArrowUp', volumeDown: 'ArrowDown', showWindow: '', toggleAmbient: 'b',
+  skipPomodoro: '', resetPomodoro: '',
+  setModeSequential: '', setModeLoopList: '', setModeLoopSingle: '', setModeShuffle: '', setModeSingle: '',
+};
 
 function matchesKeyCombo(e: KeyboardEvent, combo: string): boolean {
   if (!combo) return false;
@@ -225,8 +235,17 @@ function App() {
       if (matchesKeyCombo(e, local.togglePomodoro)) { e.preventDefault(); if (p.isRunning) p.pause(); else p.start(); return; }
       if (matchesKeyCombo(e, local.toggleMusic)) { e.preventDefault(); ensureAnalyser(); pl.togglePlay(); return; }
       if (matchesKeyCombo(e, local.nextTrack)) { e.preventDefault(); ensureAnalyser(); pl.next(); return; }
+      if (matchesKeyCombo(e, local.prevTrack)) { e.preventDefault(); pl.prev(); return; }
       if (matchesKeyCombo(e, local.volumeUp)) { e.preventDefault(); pl.setVolume(Math.min(1, pl.volume + 0.1)); return; }
       if (matchesKeyCombo(e, local.volumeDown)) { e.preventDefault(); pl.setVolume(Math.max(0, pl.volume - 0.1)); return; }
+      if (matchesKeyCombo(e, local.toggleAmbient)) { e.preventDefault(); (window as any).__toggleAmbient?.(); return; }
+      if (matchesKeyCombo(e, local.skipPomodoro)) { e.preventDefault(); p.skip(); return; }
+      if (matchesKeyCombo(e, local.resetPomodoro)) { e.preventDefault(); p.reset(); return; }
+      if (matchesKeyCombo(e, local.setModeSequential)) { e.preventDefault(); pl.setLoopMode('none'); pl.setOrderMode('sequential'); return; }
+      if (matchesKeyCombo(e, local.setModeLoopList)) { e.preventDefault(); pl.setLoopMode('list'); pl.setOrderMode('sequential'); return; }
+      if (matchesKeyCombo(e, local.setModeLoopSingle)) { e.preventDefault(); pl.setLoopMode('single'); pl.setOrderMode('sequential'); return; }
+      if (matchesKeyCombo(e, local.setModeShuffle)) { e.preventDefault(); pl.setLoopMode('list'); pl.setOrderMode('random'); return; }
+      if (matchesKeyCombo(e, local.setModeSingle)) { e.preventDefault(); pl.setLoopMode('none'); pl.setOrderMode('random'); return; }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -260,8 +279,17 @@ function App() {
         togglePomodoro: () => { const p = pomodoroRef.current; if (p.isRunning) p.pause(); else p.start(); },
         toggleMusic: () => { ensureAnalyser(); playerRef.current.togglePlay(); },
         nextTrack: () => { ensureAnalyser(); playerRef.current.next(); },
+        prevTrack: () => { playerRef.current.prev(); },
         volumeUp: () => { playerRef.current.setVolume(Math.min(1, playerRef.current.volume + 0.1)); },
         volumeDown: () => { playerRef.current.setVolume(Math.max(0, playerRef.current.volume - 0.1)); },
+        toggleAmbient: () => { (window as any).__toggleAmbient?.(); },
+        skipPomodoro: () => { pomodoroRef.current.skip(); },
+        resetPomodoro: () => { pomodoroRef.current.reset(); },
+        setModeSequential: () => { playerRef.current.setLoopMode('none'); playerRef.current.setOrderMode('sequential'); },
+        setModeLoopList: () => { playerRef.current.setLoopMode('list'); playerRef.current.setOrderMode('sequential'); },
+        setModeLoopSingle: () => { playerRef.current.setLoopMode('single'); playerRef.current.setOrderMode('sequential'); },
+        setModeShuffle: () => { playerRef.current.setLoopMode('list'); playerRef.current.setOrderMode('random'); },
+        setModeSingle: () => { playerRef.current.setLoopMode('none'); playerRef.current.setOrderMode('random'); },
         showWindow: async () => {
           try {
             const { getCurrentWindow } = await import('@tauri-apps/api/window');
