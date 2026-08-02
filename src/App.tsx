@@ -121,6 +121,23 @@ function App() {
       ensureAnalyser();
       playerRef.current.togglePlay();
     };
+    (window as any).__prevTrack = () => {
+      playerRef.current.prev();
+    };
+    (window as any).__nextTrack = () => {
+      ensureAnalyser();
+      playerRef.current.next();
+    };
+    (window as any).__setPlayMode = (mode: string) => {
+      const p = playerRef.current;
+      switch (mode) {
+        case 'sequential': p.setLoopMode('none'); p.setOrderMode('sequential'); break;
+        case 'loop-list': p.setLoopMode('list'); p.setOrderMode('sequential'); break;
+        case 'loop-single': p.setLoopMode('single'); p.setOrderMode('sequential'); break;
+        case 'shuffle': p.setLoopMode('list'); p.setOrderMode('random'); break;
+        case 'single': p.setLoopMode('none'); p.setOrderMode('random'); break;
+      }
+    };
   }, [ensureAnalyser]);
 
   // Save/restore window size and position

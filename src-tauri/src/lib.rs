@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
@@ -29,15 +29,38 @@ pub fn run() {
 
             // --- Tray Menu ---
             let show_item = MenuItemBuilder::with_id("show", "显示主界面").build(app)?;
-            let toggle_pomodoro = MenuItemBuilder::with_id("toggle_pomodoro", "暂停/继续番茄钟").build(app)?;
+            let prev_track = MenuItemBuilder::with_id("prev_track", "上一首").build(app)?;
             let toggle_music = MenuItemBuilder::with_id("toggle_music", "暂停/继续音乐").build(app)?;
+            let next_track = MenuItemBuilder::with_id("next_track", "下一首").build(app)?;
+            let toggle_ambient = MenuItemBuilder::with_id("toggle_ambient", "暂停/继续环境音").build(app)?;
+            let toggle_pomodoro = MenuItemBuilder::with_id("toggle_pomodoro", "暂停/继续番茄钟").build(app)?;
+
+            // Play mode submenu
+            let mode_sequential = MenuItemBuilder::with_id("mode_sequential", "顺序播放").build(app)?;
+            let mode_loop_list = MenuItemBuilder::with_id("mode_loop_list", "列表循环").build(app)?;
+            let mode_loop_single = MenuItemBuilder::with_id("mode_loop_single", "单曲循环").build(app)?;
+            let mode_shuffle = MenuItemBuilder::with_id("mode_shuffle", "随机播放").build(app)?;
+            let mode_single = MenuItemBuilder::with_id("mode_single", "单曲播放").build(app)?;
+            let play_mode_submenu = SubmenuBuilder::new(app, "切换播放模式")
+                .item(&mode_sequential)
+                .item(&mode_loop_list)
+                .item(&mode_loop_single)
+                .item(&mode_shuffle)
+                .item(&mode_single)
+                .build()?;
+
             let quit_item = MenuItemBuilder::with_id("quit", "退出程序").build(app)?;
 
             let menu = MenuBuilder::new(app)
                 .item(&show_item)
                 .separator()
-                .item(&toggle_pomodoro)
+                .item(&prev_track)
                 .item(&toggle_music)
+                .item(&next_track)
+                .item(&toggle_ambient)
+                .separator()
+                .item(&toggle_pomodoro)
+                .item(&play_mode_submenu)
                 .separator()
                 .item(&quit_item)
                 .build()?;
@@ -63,27 +86,47 @@ pub fn run() {
                     }
                 })
                 .on_menu_event(move |app, event| {
-                    match event.id().as_ref() {
-                        "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
+                    if let Some(window) = app.get_webview_window("main") {
+                        match event.id().as_ref() {
+                            "show" => {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
-                        }
-                        "toggle_pomodoro" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.eval("window.__togglePomodoro && window.__togglePomodoro()");
+                            "prev_track" => {
+                                let _ = window.eval("window.__prevTrack && window.__prevTrack()");
                             }
-                        }
-                        "toggle_music" => {
-                            if let Some(window) = app.get_webview_window("main") {
+                            "toggle_music" => {
                                 let _ = window.eval("window.__toggleMusic && window.__toggleMusic()");
                             }
+                            "next_track" => {
+                                let _ = window.eval("window.__nextTrack && window.__nextTrack()");
+                            }
+                            "toggle_ambient" => {
+                                let _ = window.eval("window.__toggleAmbient && window.__toggleAmbient()");
+                            }
+                            "toggle_pomodoro" => {
+                                let _ = window.eval("window.__togglePomodoro && window.__togglePomodoro()");
+                            }
+                            "mode_sequential" => {
+                                let _ = window.eval("window.__setPlayMode && window.__setPlayMode('sequential')");
+                            }
+                            "mode_loop_list" => {
+                                let _ = window.eval("window.__setPlayMode && window.__setPlayMode('loop-list')");
+                            }
+                            "mode_loop_single" => {
+                                let _ = window.eval("window.__setPlayMode && window.__setPlayMode('loop-single')");
+                            }
+                            "mode_shuffle" => {
+                                let _ = window.eval("window.__setPlayMode && window.__setPlayMode('shuffle')");
+                            }
+                            "mode_single" => {
+                                let _ = window.eval("window.__setPlayMode && window.__setPlayMode('single')");
+                            }
+                            "quit" => {
+                                app.exit(0);
+                            }
+                            _ => {}
                         }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
                     }
                 })
                 .build(app)?;

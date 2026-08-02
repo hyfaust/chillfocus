@@ -245,6 +245,13 @@ export default function AmbientSounds() {
     };
   }, []);
 
+  // Expose togglePauseAll for tray menu
+  const togglePauseAllRef = useRef(togglePauseAll);
+  togglePauseAllRef.current = togglePauseAll;
+  useEffect(() => {
+    (window as any).__toggleAmbient = () => togglePauseAllRef.current();
+  }, []);
+
   const allSounds: { id: string; label: string; icon: string; src: string; isCustom?: boolean }[] = [
     ...PRESETS.map(p => ({ ...p })),
     ...customSounds.map(c => ({ id: c.id, label: c.label, icon: '🎵', src: c.url, isCustom: true })),
